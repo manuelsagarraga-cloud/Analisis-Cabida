@@ -156,6 +156,27 @@ ul.notas li.n-nota{border-left-color:var(--ac)}ul.notas li.n-estado{border-left-
 table.t tr.clickable{cursor:pointer}table.t tr.clickable:hover td{background:var(--acbg)}
 table.t th.sortable{cursor:pointer;user-select:none}table.t th.sortable:hover{color:var(--c0)}
 h3.lbl{font-size:11px}
+.login-page{flex:1;display:grid;grid-template-columns:1.1fr 1fr;min-height:0;overflow-y:auto;background:var(--bg)}
+.login-brand{background:#141414;color:#fff;padding:56px 48px;display:flex;flex-direction:column;justify-content:center;gap:8px;border-right:3px solid var(--ac)}
+.login-logo{width:52px;height:52px;border-radius:4px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:19px;letter-spacing:1px;margin-bottom:10px}
+.login-brand h1{font-size:30px;font-weight:300;letter-spacing:1px;line-height:1.2}
+.login-sub{font-size:11.5px;text-transform:uppercase;letter-spacing:3px;color:rgba(255,255,255,.55);margin-bottom:16px}
+.login-brand ul{list-style:none;display:grid;gap:10px;max-width:440px;margin:4px 0 20px}
+.login-brand li{padding-left:16px;position:relative;font-size:14px;line-height:1.5;color:rgba(255,255,255,.86)}
+.login-brand li:before{content:'';position:absolute;left:0;top:9px;width:7px;height:2px;background:var(--ac2)}
+.login-brand .small{color:rgba(255,255,255,.45)}
+.login-side{display:flex;align-items:center;justify-content:center;padding:32px 20px}
+.login-card{width:100%;max-width:360px;background:var(--el);border:1px solid var(--b0);border-radius:4px;padding:26px;color:var(--c0)}
+.login-card h2{font-size:18px;margin-bottom:2px}
+@media(max-width:800px){.login-page{grid-template-columns:1fr;align-content:start}.login-brand{padding:28px 20px;border-right:0;border-bottom:3px solid var(--ac)}.login-brand ul{display:none}}
+.umenu{position:relative;display:flex;align-items:center;gap:6px}
+.empsel{font-family:var(--ff);font-size:12px;font-weight:700;padding:5px 8px;border:1px solid var(--b0);border-radius:3px;background:var(--el);color:var(--c0);max-width:180px;cursor:pointer}
+.ubtn{display:flex;align-items:center;gap:6px;border:1px solid var(--b0);background:var(--el);color:var(--c1);border-radius:3px;padding:3px 8px 3px 3px;cursor:pointer;font-family:var(--ff);font-size:12px;font-weight:700}
+.ubtn:hover{background:var(--bg1);color:var(--c0)}
+.avatar{width:22px;height:22px;border-radius:3px;background:var(--ac);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+.uname{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.udrop{position:absolute;right:0;top:calc(100% + 6px);z-index:2500;background:var(--el);border:1px solid var(--b0);border-radius:4px;box-shadow:var(--shm);padding:12px;width:250px;color:var(--c0)}
+@media(max-width:600px){.uname{display:none}.empsel{max-width:120px}}
 @media print{
   body{overflow:visible;height:auto;background:#fff;color:#000}
   #root{height:auto}
@@ -862,6 +883,16 @@ const P8256 = 'fid,ocupacion_del_suelo,ord_y_perfil,ord_original,ord_modificator
 const PLOTEO = 'id,expediente_1,nomenclatu,nombre,nombfant,tipoloteo,cantlotes,cantviv,autorizado,decresapro,ord_8060,modif_12729,ord_13077,ord_11687,ord_12476,modif_10330,ord_10374,ord_8606';
 const LOTEO_ORDS = { ord_8060: '8060', modif_12729: '12729', ord_13077: '13077', ord_11687: '11687', ord_12476: '12476', modif_10330: '10330', ord_10374: '10374', ord_8606: '8606' };
 
+/* Mapas base gratuitos y sin clave: IGN (oficial de Argentina), OpenStreetMap y satélite de Esri.
+   CARTO dejó de servir teselas sin API key. */
+const BASES = {
+  gris: ['Mapa gris (IGN)', 'https://wms.ign.gob.ar/geoserver/gwc/service/tms/1.0.0/mapabase_gris@EPSG%3A3857@png/{z}/{x}/{-y}.png', '© IGN Argentina · © OpenStreetMap', 18],
+  argenmap: ['Argenmap (IGN)', 'https://wms.ign.gob.ar/geoserver/gwc/service/tms/1.0.0/capabaseargenmap@EPSG%3A3857@png/{z}/{x}/{-y}.png', '© IGN Argentina · © OpenStreetMap', 18],
+  osm: ['Calles (OSM)', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap', 19],
+  sat: ['Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Esri World Imagery', 19]
+};
+function baseLayer(k) { const b = BASES[k]; return L.tileLayer(b[1], { maxZoom: 20, maxNativeZoom: b[3], attribution: b[2] }); }
+
 async function wfs(layer, cql, opt) {
   opt = opt || {};
   const p = new URLSearchParams({ service: 'WFS', version: '2.0.0', request: 'GetFeature', outputFormat: 'application/json', srsName: 'EPSG:4326', typeNames: 'idecor:' + layer });
@@ -1513,9 +1544,8 @@ function MapView({ onPick, M, overlay, active, focus }) {
   pickRef.current = onPick;
   useEffect(function () {
     const map = L.map(el.current, { zoomControl: true }).setView([-31.4167, -64.1833], 13);
-    const base = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
-    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, attribution: 'Esri World Imagery' });
+    const base = baseLayer('gris').addTo(map);
+    const argen = baseLayer('argenmap'), osm = baseLayer('osm'), sat = baseLayer('sat');
     const w = function (layer, extra) { return L.tileLayer.wms(WMS, Object.assign({ layers: 'idecor:' + layer, format: 'image/png', transparent: true, version: '1.1.1', attribution: 'IDECOR · Municipalidad de Córdoba' }, extra || {})); };
     const zon = w('CBA_Ordenanza_8256', { opacity: 0.45 }).addTo(map);
     const par = w('parcelas', { minZoom: 17, opacity: 0.85 }).addTo(map);
@@ -1524,7 +1554,7 @@ function MapView({ onPick, M, overlay, active, focus }) {
     const uso = w('CBA_Ordenanza_8133', { opacity: 0.45 });
     const lot = w('loteos_muni_aprobados', { opacity: 0.6 });
     const ecop = w('franja_ecoprod_13131', { opacity: 0.6 });
-    L.control.layers({ 'Mapa claro': base, 'Calles (OSM)': osm, 'Satélite': sat }, { 'Ocupación del suelo': zon, 'Parcelas': par, 'Centros de manzana': cm, 'Patrimonio catalogado': pat, 'Uso del suelo (8133)': uso, 'Loteos aprobados': lot, 'Franja ecoproductiva': ecop }, { collapsed: true }).addTo(map);
+    L.control.layers({ 'Mapa gris (IGN)': base, 'Argenmap (IGN)': argen, 'Calles (OSM)': osm, 'Satélite': sat }, { 'Ocupación del suelo': zon, 'Parcelas': par, 'Centros de manzana': cm, 'Patrimonio catalogado': pat, 'Uso del suelo (8133)': uso, 'Loteos aprobados': lot, 'Franja ecoproductiva': ecop }, { collapsed: true }).addTo(map);
     L.control.scale({ imperial: false }).addTo(map);
     grp.current = L.layerGroup().addTo(map);
     map.on('click', function (e) { pickRef.current(e.latlng.lat, e.latlng.lng); });
@@ -1976,6 +2006,36 @@ function LoginBox({ onDone, onCancel }) {
   </div>;
 }
 
+function formDesdeLote(l) {
+  return { nombre: l.nombre || '', estado: l.estado, precio: l.precio != null ? String(l.precio).replace('.', ',') : '', moneda: l.moneda || 'USD', tipo_cambio: l.tipo_cambio != null ? String(l.tipo_cambio).replace('.', ',') : '', eficiencia: String(Math.round((Number(l.eficiencia) || 0.8) * 100)), etiquetas: (l.etiquetas || []).join(', ') };
+}
+function numAR(x) { if (x === '' || x == null) return null; const n = parseFloat(String(x).replace(/\./g, '').replace(',', '.')); return isFinite(n) ? n : null; }
+function camposDesdeForm(f) {
+  const ef = Math.min(100, Math.max(1, parseFloat(String(f.eficiencia).replace(',', '.')) || 80)) / 100;
+  return { nombre: f.nombre.trim() || null, estado: f.estado, precio: numAR(f.precio), moneda: f.moneda, tipo_cambio: numAR(f.tipo_cambio), eficiencia: ef, etiquetas: f.etiquetas.split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 20) };
+}
+// Guarda los datos editables de un lote y deja constancia en las notas de los cambios de estado y precio
+async function guardarCambiosLote(lote, f) {
+  const b = camposDesdeForm(f);
+  await sbReq('lotes?id=eq.' + lote.id, { method: 'PATCH', body: b, prefer: 'return=minimal' });
+  const nota = function (texto, tipo) { return sbReq('lote_notas', { method: 'POST', body: { lote_id: lote.id, empresa: lote.empresa, texto: texto, tipo: tipo }, prefer: 'return=minimal' }); };
+  if (b.estado !== lote.estado) await nota('Estado: ' + estadoInfo(lote.estado)[1] + ' → ' + estadoInfo(b.estado)[1], 'estado');
+  const antes = lote.precio != null ? Number(lote.precio) : null;
+  if (b.precio !== antes || b.moneda !== lote.moneda) await nota('Precio: ' + (antes != null ? lote.moneda + ' ' + nf(antes) : 'sin precio') + ' → ' + (b.precio != null ? b.moneda + ' ' + nf(b.precio) : 'sin precio'), 'precio');
+  return b;
+}
+function CamposLote({ f, setF, tc }) {
+  const setK = function (k) { return function (e) { const val = e.target.value; setF(function (o) { const n = Object.assign({}, o); n[k] = val; return n; }); }; };
+  return <div className="inputs" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+    <label className="fld" style={{ gridColumn: 'span 2' }}><span>Nombre</span><span className="row"><input value={f.nombre} onChange={setK('nombre')} maxLength={200} style={{ fontFamily: 'var(--ff)' }} /></span></label>
+    <label className="fld"><span>Estado</span><span className="row"><select value={f.estado} onChange={setK('estado')}>{ESTADOS.map(function (e) { return <option key={e[0]} value={e[0]}>{e[1]}</option>; })}</select></span></label>
+    <label className="fld"><span>Precio pedido</span><span className="row"><input inputMode="decimal" value={f.precio} onChange={setK('precio')} placeholder="0" /><select value={f.moneda} onChange={setK('moneda')} style={{ flex: '0 0 auto', borderLeft: '1px solid var(--b0)' }}><option>USD</option><option>ARS</option></select></span></label>
+    <label className="fld"><span>Tipo de cambio</span><span className="row"><input inputMode="decimal" value={f.tipo_cambio} onChange={setK('tipo_cambio')} placeholder={tc ? String(Math.round(tc.v)) : '$ por US$'} /><span className="u">$/US$</span></span></label>
+    <label className="fld"><span>Superficie vendible</span><span className="row"><input inputMode="decimal" value={f.eficiencia} onChange={setK('eficiencia')} /><span className="u">% de la cabida</span></span></label>
+    <label className="fld" style={{ gridColumn: 'span 2' }}><span>Etiquetas (separadas por coma)</span><span className="row"><input value={f.etiquetas} onChange={setK('etiquetas')} placeholder="esquina, dueño directo, urgente" style={{ fontFamily: 'var(--ff)' }} /></span></label>
+  </div>;
+}
+
 function faltaTabla(e) {
   if (!e) return '';
   if (e.missing) return 'La cartera todavía no está creada en Supabase: falta correr sql/001_inicial.sql en el SQL Editor.';
@@ -1984,8 +2044,127 @@ function faltaTabla(e) {
   return e.message || String(e);
 }
 
+/* ── Pantalla de ingreso ── */
+function LoginScreen({ onDone }) {
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async function (e) {
+    e.preventDefault(); setErr(''); setBusy(true);
+    try { const t = await sbLogin(email.trim(), pass); onDone(sbWho(t)); }
+    catch (x) { setErr(x.message); setBusy(false); }
+  };
+  return <div className="login-page">
+    <div className="login-brand">
+      <div className="login-logo">AC</div>
+      <h1>Análisis de Cabida</h1>
+      <p className="login-sub">Córdoba capital</p>
+      <ul>
+        <li>La normativa oficial de cada lote al instante: ocupación, uso y fraccionamiento del suelo, patrimonio, loteos y ordenanzas.</li>
+        <li>Cabida máxima en m² con la geometría real del lote y las reglas vigentes de la Ord. 8256.</li>
+        <li>Cartera de lotes de tu empresa con precio, incidencia, notas y escenarios.</li>
+      </ul>
+      <p className="small">Datos de IDECOR y la Municipalidad de Córdoba, consultados en vivo.</p>
+    </div>
+    <div className="login-side">
+      <form className="login-card" onSubmit={go}>
+        <h2>Ingresar</h2>
+        <p className="small muted" style={{ marginBottom: 14 }}>Con el usuario que te dio el administrador.</p>
+        <label className="fld" style={{ marginBottom: 10 }}><span>Email</span><span className="row"><input type="email" value={email} onChange={function (e) { setEmail(e.target.value); }} autoFocus required autoComplete="username" /></span></label>
+        <label className="fld" style={{ marginBottom: 14 }}><span>Contraseña</span><span className="row"><input type="password" value={pass} onChange={function (e) { setPass(e.target.value); }} required autoComplete="current-password" /></span></label>
+        {err && <div className="alert err" style={{ marginTop: 0, marginBottom: 12 }}>{err}</div>}
+        <button type="submit" className="btn pri" disabled={busy} style={{ width: '100%', padding: '9px 12px', fontSize: 13 }}>{busy ? 'Ingresando…' : 'Ingresar'}</button>
+        <p className="small muted" style={{ marginTop: 14 }}>¿No tenés usuario? Pedíselo al administrador de tu empresa.</p>
+      </form>
+    </div>
+  </div>;
+}
+
+/* ── Menú de usuario: empresa, selector de empresa para el admin y cerrar sesión ── */
+function UserMenu({ sess, empresas, empCtx, setEmpCtx, onSalir }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(function () {
+    if (!open) return;
+    const h = function (e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return function () { document.removeEventListener('mousedown', h); };
+  }, [open]);
+  const nomEmp = sess.empresa ? (empresas[sess.empresa] || sess.empresa) : 'sin empresa';
+  const ids = Object.keys(empresas).sort(function (a, b) { return String(empresas[a]).localeCompare(String(empresas[b])); });
+  return <div className="umenu" ref={ref}>
+    {sess.admin && <select className="empsel" value={empCtx} onChange={function (e) { setEmpCtx(e.target.value); }} title="Empresa que estás viendo" aria-label="Empresa que estás viendo">
+      <option value="*">Todas las empresas</option>
+      {ids.map(function (id) { return <option key={id} value={id}>{empresas[id]}</option>; })}
+    </select>}
+    <button className="ubtn" onClick={function () { setOpen(!open); }} aria-expanded={open} title={sess.email}>
+      <span className="avatar">{(sess.email || '?').slice(0, 1).toUpperCase()}</span>
+      <span className="uname">{sess.admin ? 'Admin' : nomEmp}</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
+    </button>
+    {open && <div className="udrop">
+      <div style={{ fontWeight: 700, fontSize: 12.5, wordBreak: 'break-all' }}>{sess.email}</div>
+      <div className="small muted" style={{ marginTop: 2 }}>{sess.admin ? 'Administrador · ve todas las empresas · empresa propia: ' + nomEmp : 'Empresa ' + nomEmp}</div>
+      <button className="btn" style={{ width: '100%', marginTop: 12 }} onClick={function () { setOpen(false); onSalir(); }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
+        Cerrar sesión
+      </button>
+    </div>}
+  </div>;
+}
+
+/* ── Editar o eliminar un lote desde la tabla de la cartera ── */
+function EditLoteModal({ lote, modo, onClose, onSaved, empresas, admin }) {
+  const [f, setF] = useState(function () { return formDesdeLote(lote); });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [borrar, setBorrar] = useState(modo === 'eliminar');
+  const [tc, setTc] = useState(null);
+  useEffect(function () { tipoCambioMEP().then(setTc); }, []);
+  useEffect(function () { const h = function (e) { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', h); return function () { document.removeEventListener('keydown', h); }; }, []);
+  const guardar = async function (e) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try { await guardarCambiosLote(lote, f); await onSaved('Cambios guardados en ' + (f.nombre || 'el lote')); }
+    catch (x) { setErr(faltaTabla(x)); setBusy(false); }
+  };
+  const eliminar = async function () {
+    setBusy(true); setErr('');
+    try { await sbReq('lotes?id=eq.' + lote.id, { method: 'DELETE' }); await onSaved('"' + (lote.nombre || 'Lote') + '" eliminado de la cartera'); }
+    catch (x) { setErr(faltaTabla(x)); setBusy(false); }
+  };
+  return <div className="modal-bg" onClick={function (e) { if (e.target === e.currentTarget) onClose(); }}>
+    <form className="modal" style={{ maxWidth: 560 }} onSubmit={guardar}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+        <div><h2 style={{ fontSize: 16 }}>{borrar ? 'Eliminar lote' : 'Editar lote'}</h2>
+          <div className="small muted">{lote.nom_muni || ''}{lote.zona ? ' · ' + lote.zona : ''}{admin ? ' · ' + (empresas[lote.empresa] || lote.empresa) : ''}</div></div>
+        <button type="button" className="btn-i" onClick={onClose} aria-label="Cerrar">✕</button>
+      </div>
+      {!borrar && <Fragment>
+        <CamposLote f={f} setF={setF} tc={tc} />
+        {err && <div className="alert err">{err}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 14, flexWrap: 'wrap' }}>
+          <button type="button" className="btn" style={{ color: 'var(--err)' }} onClick={function () { setBorrar(true); }}>Eliminar…</button>
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn pri" disabled={busy}>{busy ? 'Guardando…' : 'Guardar'}</button>
+          </span>
+        </div>
+      </Fragment>}
+      {borrar && <Fragment>
+        <p>Vas a eliminar <b>{lote.nombre || 'este lote'}</b> de la cartera. Se borran también sus notas y escenarios, y no se puede deshacer.</p>
+        {err && <div className="alert err">{err}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button type="button" className="btn" onClick={function () { modo === 'eliminar' ? onClose() : setBorrar(false); }}>Cancelar</button>
+          <button type="button" className="btn" disabled={busy} onClick={eliminar} style={{ background: 'var(--err)', borderColor: 'var(--err)', color: '#fff' }}>{busy ? 'Eliminando…' : 'Sí, eliminar'}</button>
+        </div>
+      </Fragment>}
+    </form>
+  </div>;
+}
+
 /* ── Tarjeta de cartera dentro de la ficha del lote ── */
-function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, marcarAplicado }) {
+function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, marcarAplicado, empresaDestino, empresas }) {
   const [notas, setNotas] = useState(null);
   const [nota, setNota] = useState('');
   const [busy, setBusy] = useState('');
@@ -1998,7 +2177,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   useEffect(function () {
     setErr(''); setBorrar(false);
     if (lote) {
-      setF({ nombre: lote.nombre || '', estado: lote.estado, precio: lote.precio != null ? String(lote.precio) : '', moneda: lote.moneda || 'USD', tipo_cambio: lote.tipo_cambio != null ? String(lote.tipo_cambio) : '', eficiencia: String(Math.round((Number(lote.eficiencia) || 0.8) * 100)), etiquetas: (lote.etiquetas || []).join(', ') });
+      setF(formDesdeLote(lote));
       setNotas(null);
       sbReq('lote_notas?lote_id=eq.' + lote.id + '&select=*&order=created_at.desc').then(setNotas).catch(function (e) { setErr(faltaTabla(e)); setNotas([]); });
     } else setF(null);
@@ -2036,6 +2215,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
     setBusy('add'); setErr('');
     try {
       const b = Object.assign(cuerpoAnalisis(), { nombre: M.pp ? 'Parcela ' + nomMuni(M.pp.Nomenclatura) : 'Lote ' + M.D.lat.toFixed(5) + ', ' + M.D.lon.toFixed(5), estado: 'en_analisis' });
+      if (empresaDestino) b.empresa = empresaDestino;
       const rows = await sbReq('lotes', { method: 'POST', body: b, prefer: 'return=representation' });
       const lt = rows && rows[0];
       if (lt) await nuevaNota(lt, 'Agregado a la cartera: ' + (b.cabida_m2 != null ? nf(b.cabida_m2) + ' m² de cabida' : 'sin cabida calculada') + (b.zona ? ' · ' + b.zona : ''), 'sistema');
@@ -2057,17 +2237,8 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   };
   const guardarDatos = async function () {
     setBusy('save'); setErr('');
-    try {
-      const precio = f.precio === '' ? null : parseFloat(String(f.precio).replace(/\./g, '').replace(',', '.'));
-      const tcv = f.tipo_cambio === '' ? null : parseFloat(String(f.tipo_cambio).replace(',', '.'));
-      const ef = Math.min(100, Math.max(1, parseFloat(String(f.eficiencia).replace(',', '.')) || 80)) / 100;
-      const etiquetas = f.etiquetas.split(',').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 20);
-      const b = { nombre: f.nombre.trim() || null, estado: f.estado, precio: isFinite(precio) ? precio : null, moneda: f.moneda, tipo_cambio: isFinite(tcv) ? tcv : null, eficiencia: ef, etiquetas: etiquetas };
-      await sbReq('lotes?id=eq.' + lote.id, { method: 'PATCH', body: b, prefer: 'return=minimal' });
-      if (b.estado !== lote.estado) await nuevaNota(lote, 'Estado: ' + estadoInfo(lote.estado)[1] + ' → ' + estadoInfo(b.estado)[1], 'estado');
-      if ((b.precio || null) !== (lote.precio != null ? Number(lote.precio) : null) || b.moneda !== lote.moneda) await nuevaNota(lote, 'Precio: ' + (lote.precio != null ? lote.moneda + ' ' + nf(lote.precio) : 'sin precio') + ' → ' + (b.precio != null ? b.moneda + ' ' + nf(b.precio) : 'sin precio'), 'precio');
-      await onChange();
-    } catch (e) { setErr(faltaTabla(e)); }
+    try { await guardarCambiosLote(lote, f); await onChange(); }
+    catch (e) { setErr(faltaTabla(e)); }
     setBusy('');
   };
   const agregarNota = async function () {
@@ -2105,15 +2276,15 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   };
 
   if (!lote) return <Card title="Cartera de lotes" src={'Empresa ' + sess.empresa}>
-    <p>Este lote no está en la cartera. Al agregarlo se guarda una foto del análisis (zona, parámetros, datos usados y cabida) para compararla después con la norma vigente.</p>
+    <p>Este lote no está en la cartera{sess.admin ? ' de ' + ((empresas || {})[empresaDestino || sess.empresa] || empresaDestino || sess.empresa) : ''}. Al agregarlo se guarda una foto del análisis (zona, parámetros, datos usados y cabida) para compararla después con la norma vigente.</p>
+    {sess.admin && !empresaDestino && <p className="small muted" style={{ marginTop: 4 }}>Como administrador, se guarda en tu empresa. Para guardarlo en otra, elegila arriba en el selector de empresas.</p>}
     {err && <div className="alert err">{err}</div>}
     <button className="btn pri" style={{ marginTop: 10 }} onClick={agregar} disabled={busy === 'add'}>{busy === 'add' ? 'Guardando…' : 'Agregar a la cartera'}</button>
   </Card>;
 
   const snap = lote.analisis;
   const cambios = cambiosNorma(snap, N);
-  const ind = f ? indicadores({ precio: f.precio === '' ? null : parseFloat(String(f.precio).replace(/\./g, '').replace(',', '.')), moneda: f.moneda, tipo_cambio: f.tipo_cambio === '' ? null : parseFloat(String(f.tipo_cambio).replace(',', '.')), eficiencia: (parseFloat(f.eficiencia) || 80) / 100 }, cabida, S, vut, tc) : null;
-  const setK = function (k) { return function (e) { const val = e.target.value; setF(function (o) { const n = Object.assign({}, o); n[k] = val; return n; }); }; };
+  const ind = f ? indicadores(camposDesdeForm(f), cabida, S, vut, tc) : null;
   const esc = lote.escenarios || [];
   const escIndic = function (e) { const pu = precioUSD(lote); return pu != null && e.resultado && e.resultado.total ? pu / e.resultado.total : null; };
 
@@ -2124,14 +2295,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
       {cambios.length > 0 && <div className="alert">Desde el análisis del {fecha(snap.fecha)} cambió la norma: {cambios.join(' · ')}. <button className="btn" style={{ marginLeft: 6 }} onClick={actualizarAnalisis} disabled={busy === 'upd'}>Actualizar análisis</button></div>}
       {snap && snap.resultado && r && !r.error && Math.abs(snap.resultado.total - r.total) > 1 && cambios.length === 0 && <div className="alert info">Con los datos de hoy la cabida da {nf(r.total)} m²; en el análisis guardado ({fecha(snap.fecha)}) daba {nf(snap.resultado.total)} m². <button className="btn" style={{ marginLeft: 6 }} onClick={actualizarAnalisis} disabled={busy === 'upd'}>{busy === 'upd' ? 'Guardando…' : 'Guardar el análisis actual'}</button></div>}
       {f && <Fragment>
-        <div className="inputs" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-          <label className="fld" style={{ gridColumn: 'span 2' }}><span>Nombre</span><span className="row"><input value={f.nombre} onChange={setK('nombre')} maxLength={200} style={{ fontFamily: 'var(--ff)' }} /></span></label>
-          <label className="fld"><span>Estado</span><span className="row"><select value={f.estado} onChange={setK('estado')}>{ESTADOS.map(function (e) { return <option key={e[0]} value={e[0]}>{e[1]}</option>; })}</select></span></label>
-          <label className="fld"><span>Precio pedido</span><span className="row"><input inputMode="decimal" value={f.precio} onChange={setK('precio')} placeholder="0" /><select value={f.moneda} onChange={setK('moneda')} style={{ flex: '0 0 auto', borderLeft: '1px solid var(--b0)' }}><option>USD</option><option>ARS</option></select></span></label>
-          <label className="fld"><span>Tipo de cambio</span><span className="row"><input inputMode="decimal" value={f.tipo_cambio} onChange={setK('tipo_cambio')} placeholder={tc ? String(Math.round(tc.v)) : '$ por US$'} /><span className="u">$/US$</span></span></label>
-          <label className="fld"><span>Superficie vendible</span><span className="row"><input inputMode="decimal" value={f.eficiencia} onChange={setK('eficiencia')} /><span className="u">% de la cabida</span></span></label>
-          <label className="fld" style={{ gridColumn: 'span 2' }}><span>Etiquetas (separadas por coma)</span><span className="row"><input value={f.etiquetas} onChange={setK('etiquetas')} placeholder="esquina, dueño directo, urgente" style={{ fontFamily: 'var(--ff)' }} /></span></label>
-        </div>
+        <CamposLote f={f} setF={setF} tc={tc} />
         {ind && <div className="metrics" style={{ marginTop: 10 }}>
           <div className="metric"><div className="lbl">Incidencia</div><div className="v">{usd(ind.porConstruible)}</div><div className="d">por m² construible{cabida ? ' · ' + nf(cabida) + ' m²' : ''}</div></div>
           <div className="metric"><div className="lbl">Por m² vendible</div><div className="v">{usd(ind.porVendible)}</div><div className="d">{f.eficiencia}% de la cabida</div></div>
@@ -2190,7 +2354,7 @@ function CarteraMap({ rows, onOpen }) {
   openRef.current = onOpen;
   useEffect(function () {
     const map = L.map(el.current, { zoomControl: true }).setView([-31.4167, -64.1833], 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
+    baseLayer('gris').addTo(map);
     grp.current = L.featureGroup().addTo(map);
     mapRef.current = map;
     setTimeout(function () { map.invalidateSize(); }, 60);
@@ -2226,7 +2390,9 @@ function cargarXLSX() {
 }
 
 /* ── Pestaña Cartera ── */
-function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReload, locales, onImportLocales }) {
+function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReload, locales, onImportLocales, empCtx }) {
+  const [edit, setEdit] = useState(null);
+  const [aviso, setAviso] = useState('');
   const [fEstado, setFEstado] = useState('todos');
   const [qq, setQq] = useState('');
   const [tag, setTag] = useState('');
@@ -2304,7 +2470,7 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
           'Creado por': l.creado_por_email || '', 'Creado': l.created_at ? new Date(l.created_at) : null, 'Actualizado': l.updated_at ? new Date(l.updated_at) : null,
           'Link': base + '#' + Number(l.lat).toFixed(6) + ',' + Number(l.lon).toFixed(6)
         };
-        if (sess.admin) o['Empresa'] = l.empresa;
+        if (sess.admin) o['Empresa'] = empresas[l.empresa] || l.empresa;
         return o;
       });
       const ws = X.utils.json_to_sheet(data, { cellDates: true });
@@ -2320,13 +2486,15 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
   return <Fragment>
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
       <div><h1 className="title-lote" style={{ fontSize: 20 }}>Cartera de lotes</h1>
-        <p className="sub">{sess.admin ? 'Administrador: ves la cartera de todas las empresas.' : 'Empresa ' + nomEmp + ' · la ven solo los usuarios de tu empresa.'}</p></div>
+        <p className="sub">{sess.admin ? (empCtx === '*' ? 'Administrador · todas las empresas' : 'Administrador · viendo ' + (empresas[empCtx] || empCtx)) : 'Empresa ' + nomEmp + ' · la ven solo los usuarios de tu empresa.'}</p></div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn" onClick={onReload}>Actualizar</button>
         <button className="btn pri" onClick={exportar} disabled={!filas.length}>Exportar Excel</button>
       </div>
     </div>
     {msg && <div className="alert err">{msg}</div>}
+    {aviso && <div className="alert ok">{aviso}</div>}
+    {edit && <EditLoteModal lote={edit.lote} modo={edit.modo} empresas={empresas} admin={sess.admin} onClose={function () { setEdit(null); }} onSaved={async function (t) { setEdit(null); setAviso(t); setTimeout(function () { setAviso(''); }, 3000); await onReload(); }} />}
     {locales.length > 0 && <div className="alert info">Tenés {locales.length} lote{locales.length > 1 ? 's' : ''} guardado{locales.length > 1 ? 's' : ''} solo en este navegador. <button className="btn" style={{ marginLeft: 6 }} onClick={onImportLocales}>Subirlos a la cartera</button></div>}
     {!cartera.length ? <div className="card"><div className="empty"><p>Todavía no hay lotes en la cartera. Abrí un lote en la pestaña Lote y tocá "Agregar a la cartera".</p></div></div> : <Fragment>
       <div className="filters">
@@ -2337,7 +2505,7 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
       </div>
       <CarteraMap rows={filas} onOpen={onOpen} />
       <div className="tw" style={{ background: 'var(--el)' }}><table className="t wrap" style={{ minWidth: 980 }}>
-        <thead><tr>{th('nombre', 'Lote', true)}{th('zona', 'Zona', true)}{th('superficie', 'Sup. m²')}{th('cabida_m2', 'Cabida m²')}{th('precio', 'Precio US$')}{th('incid', 'US$/m² constr.')}{th('vend', 'US$/m² vend.')}{th('estado', 'Estado', true)}{th('nota', 'Última nota', true)}{th('updated_at', 'Actualizado')}{sess.admin && th('empresa', 'Empresa', true)}</tr></thead>
+        <thead><tr>{th('nombre', 'Lote', true)}{th('zona', 'Zona', true)}{th('superficie', 'Sup. m²')}{th('cabida_m2', 'Cabida m²')}{th('precio', 'Precio US$')}{th('incid', 'US$/m² constr.')}{th('vend', 'US$/m² vend.')}{th('estado', 'Estado', true)}{th('nota', 'Última nota', true)}{th('updated_at', 'Actualizado')}{sess.admin && empCtx === '*' && th('empresa', 'Empresa', true)}<th style={{ minWidth: 0 }}></th></tr></thead>
         <tbody>{filas.map(function (l) {
           return <tr key={l.id} className="clickable" onClick={function () { onOpen(l); }}>
             <td style={{ fontFamily: 'var(--ff)' }}><b>{l.nombre || 'Lote'}</b><div className="small muted">{l.nom_muni || (Number(l.lat).toFixed(5) + ', ' + Number(l.lon).toFixed(5))}{(l.etiquetas || []).length ? ' · ' + l.etiquetas.join(', ') : ''}</div></td>
@@ -2347,7 +2515,11 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
             <td style={{ textAlign: 'left' }}><EstadoTag k={l.estado} /></td>
             <td style={{ textAlign: 'left', fontFamily: 'var(--ff)', maxWidth: 260, whiteSpace: 'normal' }}>{l._ult ? <Fragment><span className="small muted">{fecha(l._ult.ult.created_at)} · </span>{l._ult.ult.texto.slice(0, 90)}{l._ult.ult.texto.length > 90 ? '…' : ''}</Fragment> : '—'}</td>
             <td>{fecha(l.updated_at)}</td>
-            {sess.admin && <td style={{ textAlign: 'left' }}>{empresas[l.empresa] || l.empresa}</td>}
+            {sess.admin && empCtx === '*' && <td style={{ textAlign: 'left' }}>{empresas[l.empresa] || l.empresa}</td>}
+            <td style={{ minWidth: 0, whiteSpace: 'nowrap' }} onClick={function (e) { e.stopPropagation(); }}>
+              <button className="btn-i" title="Editar" aria-label="Editar lote" onClick={function () { setEdit({ lote: l, modo: 'editar' }); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg></button>
+              <button className="btn-i" title="Eliminar" aria-label="Eliminar lote" onClick={function () { setEdit({ lote: l, modo: 'eliminar' }); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></svg></button>
+            </td>
           </tr>;
         })}</tbody>
       </table></div>
@@ -2386,13 +2558,15 @@ function App() {
   const reqId = useRef(0);
   const dg = useDigesto();
   const [sess, setSess] = useState(null);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [authOk, setAuthOk] = useState(false);
+  const [empCtx, setEmpCtxS] = useState(function () { try { return localStorage.getItem('ac.empresa') || '*'; } catch (e) { return '*'; } });
+  const setEmpCtx = function (v) { setEmpCtxS(v); try { localStorage.setItem('ac.empresa', v); } catch (e) { } };
   const [cartera, setCartera] = useState(null);
   const [cartErr, setCartErr] = useState(null);
   const [empresas, setEmpresas] = useState({});
   const [preset, setPreset] = useState(null);
   const aplicado = useRef(null);
-  useEffect(function () { sbToken().then(function (t) { if (t) setSess(sbWho(t)); }); }, []);
+  useEffect(function () { sbToken().then(function (t) { if (t) setSess(sbWho(t)); setAuthOk(true); }); }, []);
   const loadCartera = useCallback(async function () {
     try { const rows = await sbReq('lotes?select=*&order=updated_at.desc'); setCartera(rows || []); setCartErr(null); }
     catch (e) { if (e.auth) { setSess(null); setCartera(null); } else setCartErr(faltaTabla(e)); }
@@ -2402,13 +2576,21 @@ function App() {
     loadCartera();
     sbReq('empresas?select=id,nombre').then(function (rows) { const m = {}; (rows || []).forEach(function (r) { m[r.id] = r.nombre || r.id; }); setEmpresas(m); }).catch(function () { });
   }, [sess, loadCartera]);
+  // El admin elige qué empresa ver; el resto ve siempre la suya (lo garantiza además el RLS)
+  const ctx = sess && sess.admin ? (empCtx === '*' || empresas[empCtx] ? empCtx : '*') : (sess ? sess.empresa : '*');
+  const carteraVis = useMemo(function () {
+    if (!cartera) return cartera;
+    return ctx === '*' ? cartera : cartera.filter(function (l) { return l.empresa === ctx; });
+  }, [cartera, ctx]);
+  const empresaDestino = sess && sess.admin && ctx !== '*' ? ctx : null;
   const loteActual = useMemo(function () {
+    const cartera = carteraVis;
     if (!M || !cartera) return null;
     const nom = M.pp ? String(M.pp.Nomenclatura) : null;
     const cands = cartera.filter(function (l) { return nom ? l.nomenclatura === nom : (Math.abs(l.lat - M.D.lat) < 2e-5 && Math.abs(l.lon - M.D.lon) < 2e-5); });
     if (!cands.length) return null;
     return cands.find(function (l) { return sess && l.empresa === sess.empresa; }) || cands[0];
-  }, [M, cartera, sess]);
+  }, [M, carteraVis, sess]);
   // Al abrir un lote de la cartera, la calculadora arranca con los datos del análisis guardado
   useEffect(function () {
     if (!M || !loteActual || aplicado.current === M.D.t) return;
@@ -2416,7 +2598,7 @@ function App() {
     const a = loteActual.analisis;
     if (a && a.inputs) { setNormaSel(a.normaSel != null ? a.normaSel : null); setPreset({ v: a.inputs, t: Date.now() }); }
   }, [M, loteActual]);
-  const salir = function () { sbSalir(); setSess(null); };
+  const salir = function () { sbSalir(); setSess(null); setCartera(null); setTab('lote'); };
   const aplicarEscenario = function (e) {
     setNormaSel(e.normaSel != null ? e.normaSel : null);
     setPreset({ v: e.inputs, t: Date.now() });
@@ -2427,7 +2609,9 @@ function App() {
     let ok = 0, dup = 0;
     for (const x of saved) {
       try {
-        await sbReq('lotes', { method: 'POST', body: { nombre: x.nota || (x.nom ? 'Parcela ' + x.nom : 'Lote'), nom_muni: x.nom || null, nomenclatura: x.nom ? nomProv(x.nom) : null, lat: x.lat, lon: x.lon, superficie: x.S || null, zona: x.zona || null, cabida_m2: x.total != null ? x.total : null, estado: 'nuevo' }, prefer: 'return=minimal' });
+        const body = { nombre: x.nota || (x.nom ? 'Parcela ' + x.nom : 'Lote'), nom_muni: x.nom || null, nomenclatura: x.nom ? nomProv(x.nom) : null, lat: x.lat, lon: x.lon, superficie: x.S || null, zona: x.zona || null, cabida_m2: x.total != null ? x.total : null, estado: 'nuevo' };
+        if (empresaDestino) body.empresa = empresaDestino;
+        await sbReq('lotes', { method: 'POST', body: body, prefer: 'return=minimal' });
         ok++;
       } catch (e) { if (e.status === 409) dup++; else { setCartErr(faltaTabla(e)); break; } }
     }
@@ -2493,6 +2677,9 @@ function App() {
     setTab('lote');
   };
 
+  if (!authOk) return <div className="ld" style={{ margin: 'auto' }}><div className="sp" /><span>Cargando…</span></div>;
+  if (!sess) return <LoginScreen onDone={function (w) { setSess(w); }} />;
+
   return <DigCtx.Provider value={dg}>
     <div className="hdr">
       <a href="./" className="logo">
@@ -2504,12 +2691,10 @@ function App() {
       <div className="seg" style={{ marginLeft: 8 }}>
         <button className={tab === 'lote' ? 'on' : ''} onClick={function () { setTab('lote'); }}>Lote</button>
         <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>
-        <button className={tab === 'cartera' ? 'on' : ''} onClick={function () { setTab('cartera'); }}>Cartera{cartera && cartera.length ? ' · ' + cartera.length : ''}</button>
+        <button className={tab === 'cartera' ? 'on' : ''} onClick={function () { setTab('cartera'); }}>Cartera{carteraVis && carteraVis.length ? ' · ' + carteraVis.length : ''}</button>
       </div>
       <div className="acts">
-        {sess ? <span className="sess" title={sess.email + (sess.admin ? ' · administrador' : '')}>{sess.empresa ? (empresas[sess.empresa] || sess.empresa) : 'sin empresa'}<button className="btn-i" style={{ width: 'auto', fontSize: 11, padding: '4px 6px' }} onClick={salir} title="Cerrar sesión">Salir</button></span>
-          : <button className="btn" onClick={function () { setLoginOpen(true); }}>Ingresar</button>}
-        <a className="btn-i" href={MAPA311} target="_blank" rel="noopener" title="Abrir el mapa oficial 311 de MapasCórdoba" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>↗</a>
+        {sess && <UserMenu sess={sess} empresas={empresas} empCtx={ctx} setEmpCtx={setEmpCtx} onSalir={salir} />}
         <button className="btn-i" onClick={togTheme} title="Cambiar tema">{theme === 'light' ? '🌙' : '☀️'}</button>
       </div>
     </div>
@@ -2548,7 +2733,7 @@ function App() {
             <AvisosNorma M={M} />
             <LoteCard M={M} lote={loteActual} />
             <CabidaCard M={M} normaSel={normaSel} setNormaSel={setNormaSel} preset={preset} />
-            <div className="no-print"><CarteraCard M={M} sess={sess} lote={loteActual} cartErr={cartErr} q={q} onLogin={function () { setLoginOpen(true); }} onChange={loadCartera} onApply={aplicarEscenario} marcarAplicado={function () { aplicado.current = M.D.t; }} /></div>
+            <div className="no-print"><CarteraCard M={M} sess={sess} lote={loteActual} cartErr={cartErr} q={q} empresaDestino={empresaDestino} empresas={empresas} onLogin={salir} onChange={loadCartera} onApply={aplicarEscenario} marcarAplicado={function () { aplicado.current = M.D.t; }} /></div>
             <NormaCard M={M} />
             <UsoCard M={M} />
             <FraccCard M={M} />
@@ -2570,9 +2755,8 @@ function App() {
 
     {tab === 'cartera' && <div className="page"><div className="page-in">
       {toast && <div className="alert ok" style={{ marginTop: 0 }}>{toast}</div>}
-      <CarteraTab sess={sess} cartera={cartera} cartErr={cartErr} empresas={empresas} onLogin={function () { setLoginOpen(true); }} onOpen={abrirDeCartera} onReload={loadCartera} locales={saved} onImportLocales={subirLocales} />
+      <CarteraTab sess={sess} cartera={carteraVis} cartErr={cartErr} empresas={empresas} empCtx={ctx} onLogin={salir} onOpen={abrirDeCartera} onReload={loadCartera} locales={saved} onImportLocales={subirLocales} />
     </div></div>}
-    {loginOpen && <LoginBox onCancel={function () { setLoginOpen(false); }} onDone={function (w) { setLoginOpen(false); setSess(w); }} />}
   </DigCtx.Provider>;
 }
 
