@@ -177,6 +177,9 @@ h3.lbl{font-size:11px}
 .uname{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .udrop{position:absolute;right:0;top:calc(100% + 6px);z-index:2500;background:var(--el);border:1px solid var(--b0);border-radius:4px;box-shadow:var(--shm);padding:12px;width:250px;color:var(--c0)}
 @media(max-width:600px){.uname{display:none}.empsel{max-width:120px}}
+table.t input.cell{width:100%;min-width:70px;border:1px solid transparent;background:transparent;font-family:var(--fm);font-size:12px;text-align:right;padding:3px 4px;color:var(--c0);border-radius:2px}
+table.t input.cell:hover,table.t input.cell:focus{border-color:var(--b0);background:var(--bg);outline:none}
+table.t.neg td{padding:2px 4px}
 @media print{
   body{overflow:visible;height:auto;background:#fff;color:#000}
   #root{height:auto}
@@ -2163,6 +2166,166 @@ function EditLoteModal({ lote, modo, onClose, onSaved, empresas, admin }) {
   </div>;
 }
 
+/* ── Negocio: costo total, unidades de venta y margen ──
+   Todo en dólares. Se guarda dentro de lotes.analisis.negocio (se conserva al actualizar el análisis). */
+function calcNegocio(n, cabida) {
+  const m2c = n.m2Construir != null && n.m2Construir > 0 ? n.m2Construir : (cabida || 0);
+  const terreno = n.terreno || 0;
+  const construccion = (n.costoM2 || 0) * m2c;
+  const indirectos = construccion * (n.indirectosPct || 0) / 100;
+  const us = n.unidades || [];
+  const ventas = us.reduce(function (s, u) { return s + (u.precio || 0); }, 0);
+  const m2v = us.reduce(function (s, u) { return s + (u.m2 || 0); }, 0);
+  const cp = (n.comercialPct || 0) / 100;
+  const comercial = ventas * cp;
+  const costo = terreno + construccion + indirectos + comercial;
+  const margen = ventas - costo;
+  return {
+    m2c: m2c, terreno: terreno, construccion: construccion, indirectos: indirectos, comercial: comercial, costo: costo, ventas: ventas, m2v: m2v, margen: margen,
+    margenVentas: ventas > 0 ? margen / ventas : null,
+    margenCosto: costo > 0 ? margen / costo : null,
+    incTerreno: ventas > 0 ? terreno / ventas : null,
+    // precio de venta por m² vendible que deja margen cero (la comercialización se cobra sobre la venta)
+    equilibrioM2: m2v > 0 && cp < 1 ? (terreno + construccion + indirectos) / (1 - cp) / m2v : null,
+    costoM2Total: m2c > 0 ? costo / m2c : null
+  };
+}
+const usdC = function (x) { return x == null || !isFinite(x) ? '—' : Math.abs(x) >= 1e6 ? 'US$ ' + (x / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 2 }) + ' M' : usd(x); };
+const pct = function (x, d) { return x == null || !isFinite(x) ? '—' : (x * 100).toLocaleString('es-AR', { maximumFractionDigits: d == null ? 1 : d }) + '%'; };
+const strN = function (x) { return x == null || x === '' || !isFinite(x) ? '' : String(Math.round(x * 100) / 100).replace('.', ','); };
+let _uid = 0;
+const nuevoId = function () { _uid++; return Date.now().toString(36) + _uid; };
+
+function NegocioPanel({ lote, cabida, unidadesSug, onGuardar }) {
+  const ef = Number(lote.eficiencia) || 0.8;
+  const inicial = function () {
+    const g = lote.analisis && lote.analisis.negocio;
+    if (g) return {
+      terreno: strN(g.terreno), costoM2: strN(g.costoM2), m2Construir: strN(g.m2Construir), indirectosPct: strN(g.indirectosPct), comercialPct: strN(g.comercialPct),
+      cantidad: String((g.unidades || []).length || ''), precioM2: strN(g.precioM2),
+      unidades: (g.unidades || []).map(function (u) { return { id: u.id || nuevoId(), nombre: u.nombre || '', m2: strN(u.m2), pm2: strN(u.pm2), precio: strN(u.precio) }; })
+    };
+    const pu = precioUSD(lote);
+    const vend = (cabida || 0) * ef;
+    const cant = unidadesSug && unidadesSug > 0 ? unidadesSug : Math.max(1, Math.round(vend / 65));
+    return { terreno: strN(pu != null ? Math.round(pu) : null), costoM2: '', m2Construir: '', indirectosPct: '', comercialPct: '', cantidad: String(cant), precioM2: '', unidades: [] };
+  };
+  const [f, setF] = useState(inicial);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(function () { setF(inicial()); }, [lote.id]);
+  // Si todavía no hay negocio guardado, el valor del terreno sigue al precio pedido cuando se carga después
+  useEffect(function () {
+    if (lote.analisis && lote.analisis.negocio) return;
+    const pu = precioUSD(lote);
+    if (pu != null) setF(function (o) { return o.terreno === '' ? Object.assign({}, o, { terreno: strN(Math.round(pu)) }) : o; });
+  }, [lote.precio, lote.moneda, lote.tipo_cambio]);
+  const setK = function (k) { return function (e) { const v = e.target.value; setF(function (o) { const n = Object.assign({}, o); n[k] = v; return n; }); }; };
+  const n = {
+    terreno: numAR(f.terreno), costoM2: numAR(f.costoM2), m2Construir: numAR(f.m2Construir), indirectosPct: numAR(f.indirectosPct), comercialPct: numAR(f.comercialPct), precioM2: numAR(f.precioM2),
+    unidades: f.unidades.map(function (u) { return { id: u.id, nombre: u.nombre.trim(), m2: numAR(u.m2), pm2: numAR(u.pm2), precio: numAR(u.precio) }; })
+  };
+  const c = calcNegocio(n, cabida);
+  const vendEst = (n.m2Construir && n.m2Construir > 0 ? n.m2Construir : (cabida || 0)) * ef;
+
+  const repartir = function () {
+    const cant = Math.max(1, Math.min(300, parseInt(f.cantidad, 10) || 1));
+    const m2 = vendEst / cant, pm2 = numAR(f.precioM2);
+    setF(function (o) {
+      return Object.assign({}, o, { cantidad: String(cant), unidades: Array.from({ length: cant }, function (_, i) { return { id: nuevoId(), nombre: 'Unidad ' + (i + 1), m2: strN(m2), pm2: strN(pm2), precio: pm2 != null ? strN(Math.round(m2 * pm2)) : '' }; }) });
+    });
+  };
+  const setU = function (id, k, v) {
+    setF(function (o) {
+      return Object.assign({}, o, {
+        unidades: o.unidades.map(function (u) {
+          if (u.id !== id) return u;
+          const x = Object.assign({}, u); x[k] = v;
+          const m2 = numAR(x.m2), pm2 = numAR(x.pm2), pr = numAR(x.precio);
+          if ((k === 'm2' || k === 'pm2') && m2 != null && pm2 != null) x.precio = strN(Math.round(m2 * pm2));
+          if (k === 'precio' && pr != null && m2 > 0) x.pm2 = strN(Math.round(pr / m2));
+          return x;
+        })
+      });
+    });
+  };
+  const agregarU = function (tipo) {
+    setF(function (o) { return Object.assign({}, o, { unidades: o.unidades.concat([tipo === 'cochera' ? { id: nuevoId(), nombre: 'Cochera', m2: '0', pm2: '', precio: '' } : { id: nuevoId(), nombre: 'Unidad ' + (o.unidades.length + 1), m2: '', pm2: o.precioM2, precio: '' }]) }); });
+  };
+  const quitarU = function (id) { setF(function (o) { return Object.assign({}, o, { unidades: o.unidades.filter(function (u) { return u.id !== id; }) }); }); };
+  const guardar = async function () {
+    setBusy(true); setMsg('');
+    try {
+      const g = Object.assign({}, n, { v: 1, fecha: new Date().toISOString(), cabida: cabida || null, resultado: { costo: Math.round(c.costo), ventas: Math.round(c.ventas), margen: Math.round(c.margen), margenVentas: c.margenVentas, margenCosto: c.margenCosto, m2c: c.m2c, m2v: c.m2v, equilibrioM2: c.equilibrioM2 } });
+      await onGuardar(g, c);
+      setMsg('Negocio guardado');
+      setTimeout(function () { setMsg(''); }, 2500);
+    } catch (e) { setMsg(faltaTabla(e)); }
+    setBusy(false);
+  };
+  const fld = function (k, label, unit, ph) {
+    return <label className="fld"><span>{label}</span><span className="row"><input inputMode="decimal" value={f[k]} onChange={setK(k)} placeholder={ph || ''} /><span className="u">{unit}</span></span></label>;
+  };
+  const tone = c.margen > 0 ? 'var(--ok)' : c.margen < 0 ? 'var(--err)' : 'var(--c1)';
+
+  return <div className="negocio">
+    <h3 className="lbl" style={{ marginTop: 18 }}>Negocio</h3>
+    <p className="small muted" style={{ margin: '2px 0 8px' }}>Costo total del proyecto, unidades de venta y margen. Todo en dólares; la cabida es la de la calculadora ({nf(cabida)} m²).</p>
+    <div className="inputs" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+      {fld('terreno', 'Valor del terreno', 'US$', 'precio pedido')}
+      {fld('costoM2', 'Costo de construcción', 'US$/m²', 'ej. 900')}
+      {fld('m2Construir', 'M² a construir', 'm²', nf(cabida) + ' (cabida)')}
+      {fld('indirectosPct', 'Indirectos', '% constr.', 'honorarios, permisos')}
+      {fld('comercialPct', 'Comercialización', '% ventas', 'ej. 3')}
+    </div>
+
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 12 }}>
+      <label className="fld" style={{ width: 120 }}><span>Unidades</span><span className="row"><input inputMode="numeric" value={f.cantidad} onChange={setK('cantidad')} /></span></label>
+      <label className="fld" style={{ width: 170 }}><span>Precio de venta</span><span className="row"><input inputMode="decimal" value={f.precioM2} onChange={setK('precioM2')} placeholder="ej. 2200" /><span className="u">US$/m²</span></span></label>
+      <button className="btn" onClick={repartir} title={'Divide ' + nf(vendEst) + ' m² vendibles en partes iguales'}>Repartir en partes iguales</button>
+      <button className="btn" onClick={function () { agregarU(); }}>+ Unidad</button>
+      <button className="btn" onClick={function () { agregarU('cochera'); }}>+ Cochera</button>
+    </div>
+    <p className="small muted" style={{ marginTop: 4 }}>Vendible estimado: {nf(vendEst)} m² ({Math.round(ef * 100)}% de lo construido, ajustable en "Superficie vendible"). Después de repartir podés editar cada unidad: nombre, m², precio por m² o precio total.</p>
+
+    {f.unidades.length > 0 && <div className="tw"><table className="t neg">
+      <thead><tr><th style={{ textAlign: 'left' }}>Unidad</th><th>m²</th><th>US$/m²</th><th>Precio US$</th><th></th></tr></thead>
+      <tbody>{f.unidades.map(function (u) {
+        return <tr key={u.id}>
+          <td style={{ textAlign: 'left' }}><input className="cell" style={{ textAlign: 'left', fontFamily: 'var(--ff)', minWidth: 110 }} value={u.nombre} onChange={function (e) { setU(u.id, 'nombre', e.target.value); }} maxLength={60} /></td>
+          <td><input className="cell" inputMode="decimal" value={u.m2} onChange={function (e) { setU(u.id, 'm2', e.target.value); }} /></td>
+          <td><input className="cell" inputMode="decimal" value={u.pm2} onChange={function (e) { setU(u.id, 'pm2', e.target.value); }} /></td>
+          <td><input className="cell" inputMode="decimal" value={u.precio} onChange={function (e) { setU(u.id, 'precio', e.target.value); }} /></td>
+          <td style={{ minWidth: 0 }}><button className="btn-i" title="Quitar" aria-label="Quitar unidad" onClick={function () { quitarU(u.id); }}>✕</button></td>
+        </tr>;
+      })}</tbody>
+      <tfoot><tr><td>{f.unidades.length} unidades</td><td>{nf(c.m2v, 1)}</td><td>{c.m2v > 0 ? nf(c.ventas / c.m2v) : '—'}</td><td>{nf(c.ventas)}</td><td style={{ minWidth: 0 }}></td></tr></tfoot>
+    </table></div>}
+    {f.unidades.length > 0 && c.m2v > 0 && Math.abs(c.m2v - vendEst) / vendEst > 0.05 && <div className="alert info">Las unidades suman {nf(c.m2v)} m² y lo vendible estimado es {nf(vendEst)} m². Revisá si falta o sobra superficie.</div>}
+
+    <div className="metrics" style={{ marginTop: 12 }}>
+      <div className="metric"><div className="lbl">Costo total</div><div className="v" title={usd(c.costo)}>{usdC(c.costo)}</div><div className="d">{c.costoM2Total ? usd(c.costoM2Total) + ' por m² construido' : 'cargá el costo por m²'}</div></div>
+      <div className="metric"><div className="lbl">Ventas</div><div className="v" title={usd(c.ventas)}>{usdC(c.ventas)}</div><div className="d">{c.m2v > 0 ? nf(c.m2v) + ' m² vendibles' : 'cargá las unidades'}</div></div>
+      <div className="metric"><div className="lbl">Margen</div><div className="v" style={{ color: tone }} title={usd(c.margen)}>{usdC(c.margen)}</div><div className="d">{pct(c.margenVentas)} sobre ventas · {pct(c.margenCosto)} sobre costo</div></div>
+      <div className="metric"><div className="lbl">Equilibrio</div><div className="v">{c.equilibrioM2 ? usd(c.equilibrioM2) : '—'}</div><div className="d">precio por m² con margen cero</div></div>
+    </div>
+    <div className="tw"><table className="t">
+      <tbody>
+        <tr><td>Terreno</td><td>{usd(c.terreno)}</td><td>{pct(c.costo > 0 ? c.terreno / c.costo : null)} del costo · {pct(c.incTerreno)} de las ventas</td></tr>
+        <tr><td>Construcción</td><td>{usd(c.construccion)}</td><td>{nf(c.m2c)} m² × {usd(n.costoM2)}</td></tr>
+        <tr><td>Indirectos</td><td>{usd(c.indirectos)}</td><td>{n.indirectosPct ? nf(n.indirectosPct, 1) + '% de la construcción' : 'sin cargar'}</td></tr>
+        <tr><td>Comercialización</td><td>{usd(c.comercial)}</td><td>{n.comercialPct ? nf(n.comercialPct, 1) + '% de las ventas' : 'sin cargar'}</td></tr>
+      </tbody>
+      <tfoot><tr><td>Costo total</td><td>{usd(c.costo)}</td><td>Margen {usd(c.margen)} ({pct(c.margenVentas)})</td></tr></tfoot>
+    </table></div>
+    {!n.indirectosPct && !n.comercialPct && c.ventas > 0 && <p className="small muted" style={{ marginTop: 6 }}>Sin indirectos ni comercialización el margen queda inflado: honorarios, permisos, impuestos y venta suelen sumar bastante sobre la obra.</p>}
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+      <button className="btn pri" onClick={guardar} disabled={busy}>{busy ? 'Guardando…' : 'Guardar negocio'}</button>
+      {msg && <span className="small" style={{ color: /guardado/.test(msg) ? 'var(--ok)' : 'var(--err)', fontWeight: 700 }}>{msg}</span>}
+    </div>
+  </div>;
+}
+
 /* ── Tarjeta de cartera dentro de la ficha del lote ── */
 function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, marcarAplicado, empresaDestino, empresas }) {
   const [notas, setNotas] = useState(null);
@@ -2208,7 +2371,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
       norma: N ? (N.ordModif || N.ordOriginal || null) : null,
       cabida_m2: r && !r.error ? Math.round(r.total) : null,
       unidades: r && !r.error && r.units && r.units.n ? r.units.n : null,
-      analisis: snapshot(M)
+      analisis: Object.assign(snapshot(M), lote && lote.analisis && lote.analisis.negocio ? { negocio: lote.analisis.negocio } : {})
     };
   };
   const agregar = async function () {
@@ -2268,6 +2431,11 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
     try { await sbReq('lotes?id=eq.' + lote.id, { method: 'PATCH', body: { escenarios: (lote.escenarios || []).filter(function (e) { return e.id !== id; }) }, prefer: 'return=minimal' }); await onChange(); }
     catch (e) { setErr(faltaTabla(e)); }
   };
+  const guardarNegocio = async function (g, c) {
+    await sbReq('lotes?id=eq.' + lote.id, { method: 'PATCH', body: { analisis: Object.assign({}, lote.analisis || {}, { negocio: g }) }, prefer: 'return=minimal' });
+    await nuevaNota(lote, 'Negocio: costo ' + usd(c.costo) + ' · ventas ' + usd(c.ventas) + ' · margen ' + usd(c.margen) + (c.margenVentas != null ? ' (' + pct(c.margenVentas) + ' sobre ventas)' : ''), 'sistema');
+    await onChange();
+  };
   const borrarLote = async function () {
     setBusy('del');
     try { await sbReq('lotes?id=eq.' + lote.id, { method: 'DELETE' }); await onChange(); }
@@ -2311,6 +2479,8 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
         </div>
       </Fragment>}
       {err && <div className="alert err">{err}</div>}
+
+      <NegocioPanel lote={lote} cabida={cabida != null ? Math.round(cabida) : null} unidadesSug={r && !r.error && r.units ? (r.units.alt ? r.units.alt.n : r.units.n) : null} onGuardar={guardarNegocio} />
 
       <h3 className="lbl" style={{ marginTop: 18 }}>Escenarios · {esc.length}</h3>
       <p className="small muted" style={{ margin: '2px 0 6px' }}>Guardan los datos de la calculadora tal como están ahora (superficie, frente, fondo, alturas, retiros, norma aplicada). Para un englobamiento, cargá en la calculadora la superficie y las medidas sumadas y guardalo como escenario.</p>
@@ -2415,7 +2585,7 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
   const cuenta = {}; cartera.forEach(function (l) { cuenta[l.estado] = (cuenta[l.estado] || 0) + 1; });
   const filas = cartera.map(function (l) {
     const ind = indicadores(l, Number(l.cabida_m2) || 0, Number(l.superficie) || 0, l.analisis ? l.analisis.vut : null, tc);
-    return Object.assign({}, l, { _ind: ind, _ult: ult[l.id] });
+    return Object.assign({}, l, { _ind: ind, _ult: ult[l.id], _neg: l.analisis && l.analisis.negocio ? l.analisis.negocio.resultado : null });
   }).filter(function (l) {
     if (fEstado !== 'todos' && l.estado !== fEstado) return false;
     if (tag && (l.etiquetas || []).indexOf(tag) < 0) return false;
@@ -2425,6 +2595,7 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
   const val = function (l, k) {
     if (k === 'incid') return l._ind.porConstruible;
     if (k === 'vend') return l._ind.porVendible;
+    if (k === 'margen') return l._neg ? l._neg.margenVentas : null;
     if (k === 'precio') return l._ind.pu;
     if (k === 'estado') return ESTADOS.findIndex(function (e) { return e[0] === l.estado; });
     if (k === 'nota') return l._ult ? l._ult.ult.created_at : '';
@@ -2465,6 +2636,9 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
           'Tipo de cambio': ind.tcRef ? Math.round(ind.tcRef * 100) / 100 : null, 'Precio US$': ind.pu != null ? Math.round(ind.pu) : null,
           'US$/m² terreno': ind.porTerreno != null ? Math.round(ind.porTerreno) : null, 'US$/m² construible': ind.porConstruible != null ? Math.round(ind.porConstruible) : null,
           'US$/m² vendible': ind.porVendible != null ? Math.round(ind.porVendible) : null, 'Valor tierra IDECOR US$/m²': ind.oficialUSD != null ? Math.round(ind.oficialUSD) : null,
+          'Costo total US$': l._neg ? l._neg.costo : null, 'Ventas US$': l._neg ? l._neg.ventas : null, 'Margen US$': l._neg ? l._neg.margen : null,
+          'Margen % ventas': l._neg && l._neg.margenVentas != null ? Math.round(l._neg.margenVentas * 1000) / 10 : null, 'Margen % costo': l._neg && l._neg.margenCosto != null ? Math.round(l._neg.margenCosto * 1000) / 10 : null,
+          'Unidades de venta': l.analisis && l.analisis.negocio ? (l.analisis.negocio.unidades || []).length : null,
           'Uso del suelo': a.uso || '', 'Patrimonio': a.app || (a.catalogado ? 'Catalogado' : ''), 'Etiquetas': (l.etiquetas || []).join(', '),
           'Escenarios': (l.escenarios || []).length, 'Notas': l._ult ? l._ult.cant : 0, 'Última nota': l._ult ? l._ult.ult.texto : '',
           'Creado por': l.creado_por_email || '', 'Creado': l.created_at ? new Date(l.created_at) : null, 'Actualizado': l.updated_at ? new Date(l.updated_at) : null,
@@ -2478,6 +2652,9 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
       const esc = [];
       filas.forEach(function (l) { (l.escenarios || []).forEach(function (e) { const x = e.resultado || {}; esc.push({ 'Lote': l.nombre || l.nom_muni || '', 'Escenario': e.nombre, 'Norma': e.norma || '', 'Superficie m²': e.inputs && e.inputs.S ? parseFloat(e.inputs.S) : null, 'Cabida m²': x.total, 'Plantas': x.floors, 'Altura m': x.h, 'Unidades': x.units || '', 'Autor': e.autor || '', 'Fecha': e.fecha ? new Date(e.fecha) : null }); }); });
       if (esc.length) X.utils.book_append_sheet(wb, X.utils.json_to_sheet(esc, { cellDates: true }), 'Escenarios');
+      const uds = [];
+      filas.forEach(function (l) { const g = l.analisis && l.analisis.negocio; if (g) (g.unidades || []).forEach(function (u) { uds.push({ 'Lote': l.nombre || l.nom_muni || '', 'Unidad': u.nombre || '', 'm²': u.m2, 'US$/m²': u.pm2, 'Precio US$': u.precio }); }); });
+      if (uds.length) X.utils.book_append_sheet(wb, X.utils.json_to_sheet(uds), 'Unidades');
       X.writeFile(wb, 'cartera-lotes-' + new Date().toISOString().slice(0, 10) + '.xlsx');
     } catch (e) { setMsg(e.message || String(e)); }
   };
@@ -2505,13 +2682,14 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
       </div>
       <CarteraMap rows={filas} onOpen={onOpen} />
       <div className="tw" style={{ background: 'var(--el)' }}><table className="t wrap" style={{ minWidth: 980 }}>
-        <thead><tr>{th('nombre', 'Lote', true)}{th('zona', 'Zona', true)}{th('superficie', 'Sup. m²')}{th('cabida_m2', 'Cabida m²')}{th('precio', 'Precio US$')}{th('incid', 'US$/m² constr.')}{th('vend', 'US$/m² vend.')}{th('estado', 'Estado', true)}{th('nota', 'Última nota', true)}{th('updated_at', 'Actualizado')}{sess.admin && empCtx === '*' && th('empresa', 'Empresa', true)}<th style={{ minWidth: 0 }}></th></tr></thead>
+        <thead><tr>{th('nombre', 'Lote', true)}{th('zona', 'Zona', true)}{th('superficie', 'Sup. m²')}{th('cabida_m2', 'Cabida m²')}{th('precio', 'Precio US$')}{th('incid', 'US$/m² constr.')}{th('vend', 'US$/m² vend.')}{th('margen', 'Margen')}{th('estado', 'Estado', true)}{th('nota', 'Última nota', true)}{th('updated_at', 'Actualizado')}{sess.admin && empCtx === '*' && th('empresa', 'Empresa', true)}<th style={{ minWidth: 0 }}></th></tr></thead>
         <tbody>{filas.map(function (l) {
           return <tr key={l.id} className="clickable" onClick={function () { onOpen(l); }}>
             <td style={{ fontFamily: 'var(--ff)' }}><b>{l.nombre || 'Lote'}</b><div className="small muted">{l.nom_muni || (Number(l.lat).toFixed(5) + ', ' + Number(l.lon).toFixed(5))}{(l.etiquetas || []).length ? ' · ' + l.etiquetas.join(', ') : ''}</div></td>
             <td style={{ textAlign: 'left', fontFamily: 'var(--ff)' }}>{l.zona || '—'}</td>
             <td>{nf(l.superficie)}</td><td>{nf(l.cabida_m2)}</td><td>{l._ind.pu != null ? nf(l._ind.pu) : '—'}</td>
             <td>{l._ind.porConstruible != null ? nf(l._ind.porConstruible) : '—'}</td><td>{l._ind.porVendible != null ? nf(l._ind.porVendible) : '—'}</td>
+            <td style={{ color: l._neg && l._neg.margen < 0 ? 'var(--err)' : null }}>{l._neg && l._neg.margenVentas != null ? pct(l._neg.margenVentas) : '—'}</td>
             <td style={{ textAlign: 'left' }}><EstadoTag k={l.estado} /></td>
             <td style={{ textAlign: 'left', fontFamily: 'var(--ff)', maxWidth: 260, whiteSpace: 'normal' }}>{l._ult ? <Fragment><span className="small muted">{fecha(l._ult.ult.created_at)} · </span>{l._ult.ult.texto.slice(0, 90)}{l._ult.ult.texto.length > 90 ? '…' : ''}</Fragment> : '—'}</td>
             <td>{fecha(l.updated_at)}</td>
