@@ -23,7 +23,7 @@ Herramienta web para analizar lotes de Córdoba capital: normativa urbana, cabid
 ## Datos
 
 - **En vivo, públicos:** capas WFS/WMS de IDECOR (Municipalidad de Córdoba y Catastro provincial), Georef (datos.gob.ar), OpenStreetMap, dólar MEP de dolarapi.com.
-- **Cartera, privada:** Supabase `Analisis Cabida` (`xqagbiqxberqafmggtid`). La página es pública pero las tablas tienen RLS: sin sesión no se lee nada, y cada usuario ve solo las filas de su empresa. El rol `admin` ve todas.
+- **Cartera, privada:** Supabase `Analisis Cabida` (`jujvdutkbpvgxtdedcdi`). La página es pública pero las tablas tienen RLS: sin sesión no se lee nada, y cada usuario ve solo las filas de su empresa. El rol `admin` ve todas.
 
 ## Usuarios y empresas
 
@@ -40,5 +40,5 @@ Herramienta web para analizar lotes de Córdoba capital: normativa urbana, cabid
 ## Reglas
 
 - Nada de datos de clientes en el repo: es público.
-- La clave que aparece en `index.html` es la pública (anon) de Supabase; la protección la dan las políticas RLS de `sql/001_inicial.sql`.
+- La clave que aparece en `index.html` es la pública (publishable) de Supabase; la protección la dan las políticas RLS de `sql/001_inicial.sql`.
 - Es una estimación preliminar: no reemplaza la visación ni el certificado de uso del suelo.

@@ -1,4 +1,4 @@
--- Análisis de Cabida · esquema inicial del Supabase (proyecto xqagbiqxberqafmggtid)
+-- Análisis de Cabida · esquema inicial del Supabase (proyecto jujvdutkbpvgxtdedcdi)
 -- Empresas, usuarios por empresa y cartera de lotes con notas y escenarios.
 -- Acceso: cada usuario ve solo las filas de su empresa (app_metadata.empresa); el rol admin ve todas.
 -- Se puede correr dos veces sin romper nada.
