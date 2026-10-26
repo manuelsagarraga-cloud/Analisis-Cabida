@@ -4,6 +4,13 @@ Herramienta web para analizar lotes de Córdoba capital: normativa urbana, cabid
 
 **Sitio:** https://manuelsagarraga-cloud.github.io/Analisis-Cabida/
 
+## Provincias
+
+Al entrar se elige la provincia y después la ciudad.
+
+- **Córdoba:** IDECOR (catastro, capas municipales y capa provincial de normativas).
+- **Salta:** catastro provincial de IDESA (`geonode:fc_parcelas_v20`, `geonode:fc_manzanas_…`) en toda la provincia. En Salta capital, el distrito sale de la capa `public:Zonificacion_CPUA2025_CGO_15102025` de IDEMSa y los indicadores de la tabla `CPUA` en `index.html`, cargada a mano desde las fichas del Anexo 4.2 del CPUA 2025 (Ord. 16.486), porque la capa trae FOS/FOT vacíos. El servidor municipal no aplica filtros espaciales a su capa de catastro: por eso las parcelas salen de IDESA.
+
 ## Ciudades y niveles
 
 Al entrar se elige la ciudad. El nivel dice cuánto del código urbano calcula la herramienta sola:
