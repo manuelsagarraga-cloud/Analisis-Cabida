@@ -1138,6 +1138,8 @@ function retiroSuquia(muni) {
 /* ═══════ Norma de localidades del interior (niveles 1 y 2) ═══════
    La capa provincial trae los valores como texto ("0,6", "70", "Doce metros (12m.)"): solo se toma un número
    cuando el texto empieza con uno; lo demás queda a la vista para cargarlo a mano. */
+// "R.F.: 3 m R.L.:" → quita las etiquetas que la capa deja vacías
+function nuRetiros(v) { return S_(v).replace(/(R\.\s?[FL]\.\s?:)\s*(?=R\.\s?[FL]\.\s?:|$)/gi, '').replace(/\s*(R\.\s?[FL]\.\s?:)/gi, ' $1 ').trim(); }
 function nuNum(v) { const s = S_(v); if (!s || !/^\d/.test(s)) return null; const n = E.num(s); return n != null && n > 0 ? n : null; }
 const fmtC = function (x) { return String(Math.round(x * 100) / 100).replace('.', ','); };
 function normaLocal(v, meta) {
@@ -1493,7 +1495,7 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
   // Textos de la capa que no se pudieron leer como número: quedan a la vista para cargarlos a mano
   const txt = [];
   if (nu) {
-    [['FOS', nu.fos], ['FOT', nu.fot], ['Altura máxima', nu.altura_max], ['Retiros', nu.retiros]].forEach(function (x) {
+    [['FOS', nu.fos], ['FOT', nu.fot], ['Altura máxima', nu.altura_max], ['Retiros', nuRetiros(nu.retiros)]].forEach(function (x) {
       const s = S_(x[1]); if (s && (x[0] === 'Retiros' || !/^\d/.test(s))) txt.push([x[0], s]);
     });
   }
@@ -1535,7 +1537,7 @@ function NormaLocalCard({ M }) {
           ['FOS', S_(p.fos) || null],
           ['FOT', S_(p.fot) || null],
           ['Altura máxima', S_(p.altura_max) || null],
-          ['Retiros', S_(p.retiros) || null],
+          ['Retiros', nuRetiros(p.retiros) || null],
           ['Superficie mínima', S_(p.sup_min) ? S_(p.sup_min) + (/^\d/.test(S_(p.sup_min)) ? ' m²' : '') : null],
           ['Frente mínimo', S_(p.frente_min) ? S_(p.frente_min) + (/^\d/.test(S_(p.frente_min)) ? ' m' : '') : null]
         ]} />
