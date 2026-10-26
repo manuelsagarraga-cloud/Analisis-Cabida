@@ -923,7 +923,7 @@ const NIVELES = {
   2: ['Zona automática', 'Zona, FOS, FOT y altura de la capa provincial de IDECOR. Los retiros y casos especiales se cargan a mano.'],
   1: ['Parámetros a mano', 'Catastro provincial con la geometría del lote. FOS, FOT, altura y retiros los cargás vos desde el código urbano local.']
 };
-const CORDOBA = { id: 'cordoba', nombre: 'Córdoba', nivel: 3, c: [-31.4167, -64.1833], z: 13, ord: 'Ord. 8256 y modificatorias' };
+const CORDOBA = { id: 'cordoba', prov: 'cordoba', nombre: 'Córdoba', nivel: 3, c: [-31.4167, -64.1833], z: 13, ord: 'Ord. 8256 y modificatorias' };
 // [nombre, localidad en la capa NU, lat, lon, ordenanza]
 const NIVEL2 = [
   ['Alta Gracia', 'Alta Gracia', -31.6573, -64.4174, 'Ord. 8457'],
@@ -967,12 +967,30 @@ const NIVEL2 = [
   ['Villa María', 'Villa María', -32.4095, -63.2391, 'Ord. 6402 y modificatorias'],
   ['Villa Nueva', 'Villa Nueva', -32.4743, -63.2637, 'Ord. 3710'],
   ['Villa Río Icho Cruz', 'Villa Río Icho Cruz', -31.4828, -64.5631, 'Ord. 214/23']
-].map(function (x) { return { id: 'nu:' + x[1], nombre: x[0], nu: x[1], nivel: 2, c: [x[2], x[3]], z: 15, ord: x[4] }; });
+].map(function (x) { return { id: 'nu:' + x[1], prov: 'cordoba', nombre: x[0], nu: x[1], nivel: 2, c: [x[2], x[3]], z: 15, ord: x[4] }; });
 // Localidades de nivel 1 que ya se usan (cualquier otra se agrega desde la pantalla de ciudades)
 const NIVEL1 = [
-  { id: 'loc:huinca-renanco', nombre: 'Huinca Renancó', nivel: 1, c: [-34.8413, -64.3747], z: 15, depto: 'General Roca' }
+  { id: 'loc:huinca-renanco', prov: 'cordoba', nombre: 'Huinca Renancó', nivel: 1, c: [-34.8413, -64.3747], z: 15, depto: 'General Roca' }
 ];
-const CIUDADES = [CORDOBA].concat(NIVEL2, NIVEL1);
+/* ═══════ Provincias ═══════
+   Córdoba: IDECOR. Salta: catastro provincial de IDESA y distritos del CPUA 2025 de la Municipalidad (IDEMSa).
+   El servidor municipal no aplica filtros espaciales a su capa de catastro, por eso las parcelas salen siempre de IDESA. */
+const SALTA_PROV = 'https://geoportal.salta.gob.ar/geoserver/ows';
+const SALTA_MUNI = 'https://geocloud.municipalidadsalta.gob.ar/geoserver/';
+const CPUA_LAYER = 'public:Zonificacion_CPUA2025_CGO_15102025';
+const PROVINCIAS = [
+  { id: 'cordoba', nombre: 'Córdoba', georef: 'Córdoba', fuente: 'IDECOR', desc: 'Córdoba capital con el código completo, 41 localidades con zona automática y el catastro de toda la provincia.' },
+  { id: 'salta', nombre: 'Salta', georef: 'Salta', fuente: 'IDESA', desc: 'Salta capital con los distritos y la tabla del CPUA 2025, y el catastro provincial para el resto de la provincia.' }
+];
+const provDe = function (c) { return (c && c.prov) || 'cordoba'; };
+const provInfo = function (id) { return PROVINCIAS.find(function (p) { return p.id === id; }) || PROVINCIAS[0]; };
+const SALTA_CAP = { id: 'salta:capital', prov: 'salta', nombre: 'Salta capital', georefLoc: 'Salta', nivel: 2, c: [-24.7893, -65.4103], z: 15, ord: 'CPUA 2025 · Ord. 16.486', cpua: true };
+// Fuente de catastro según la ciudad
+function fuenteCat(city) {
+  if (provDe(city) === 'salta') return { base: SALTA_PROV, wms: SALTA_PROV, par: 'geonode:fc_parcelas_v20', mz: 'geonode:fc_manzanas_019c30b98c9a99292937c6ecf2acb025', attr: 'IDESA · Provincia de Salta' };
+  return { base: WFS, wms: WMS, par: 'parcelas', mz: 'manzana', attr: 'IDECOR' };
+}
+const CIUDADES = [CORDOBA].concat(NIVEL2, NIVEL1, [SALTA_CAP]);
 const esLocal = function (c) { return !!c && c.id !== 'cordoba'; };
 const normTxt = function (s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); };
 function ciudadPorId(id, obj) {
@@ -985,14 +1003,14 @@ function storeCity(c) { try { if (c) localStorage.setItem('ac.ciudad', JSON.stri
 
 async function wfs(layer, cql, opt) {
   opt = opt || {};
-  const p = new URLSearchParams({ service: 'WFS', version: '2.0.0', request: 'GetFeature', outputFormat: 'application/json', srsName: 'EPSG:4326', typeNames: 'idecor:' + layer });
+  const p = new URLSearchParams({ service: 'WFS', version: '2.0.0', request: 'GetFeature', outputFormat: 'application/json', srsName: 'EPSG:4326', typeNames: layer.indexOf(':') > 0 ? layer : 'idecor:' + layer });
   if (cql) p.set('CQL_FILTER', cql);
   if (opt.props) p.set('propertyName', opt.props);
   if (opt.count) p.set('count', String(opt.count));
   const ctrl = new AbortController();
   const t = setTimeout(function () { ctrl.abort(); }, opt.timeout || 25000);
   try {
-    const r = await fetch(WFS + '?' + p.toString(), { signal: ctrl.signal });
+    const r = await fetch((opt.base || WFS) + '?' + p.toString(), { signal: ctrl.signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
     return j.features || [];
@@ -1010,7 +1028,14 @@ async function consultar(lat, lon, city) {
   const d = 0.0012;
   const bb = 'BBOX(geom,' + (lon - d) + ',' + (lat - d) + ',' + (lon + d) + ',' + (lat + d) + ",'EPSG:4326')";
   const local = esLocal(city);
-  const jobs = local ? {
+  const salta = provDe(city) === 'salta';
+  const F = fuenteCat(city);
+  const jobs = salta ? {
+    parcela: () => wfs(F.par, I, { base: F.base, count: 1 }),
+    manzana: () => wfs(F.mz, I, { base: F.base, count: 1 }),
+    vecinas: () => wfs(F.mz, bb, { base: F.base, count: 80 }),
+    cpua: () => city && city.cpua ? wfs(CPUA_LAYER, I, { base: SALTA_MUNI + 'wfs', props: 'DISTRITO,DISTRITO_APP,FOS,FOT_PRIVADO,ALTURA_M' }) : Promise.resolve([])
+  } : local ? {
     parcela: () => wfs('parcelas', I, { count: 1 }),
     manzana: () => wfs('manzana', I, { count: 1 }),
     nu: () => wfs(NU_LAYER, I, { props: NU_PROPS }),
@@ -1046,6 +1071,8 @@ async function consultar(lat, lon, city) {
   const D = { lat: lat, lon: lon, errors: {}, t: Date.now(), city: city || CORDOBA };
   if (local) CBA_KEYS.forEach(function (k) { D[k] = []; });
   else D.nu = [];
+  if (salta) { D.nu = []; D.vt = []; D.alq = []; }
+  else D.cpua = [];
   const run = async function (ks) {
     const res = await Promise.allSettled(ks.map(function (k) { return jobs[k](); }));
     ks.forEach(function (k, i) {
@@ -1057,8 +1084,32 @@ async function consultar(lat, lon, city) {
   // IDECOR a veces se satura con tantas consultas juntas: un reintento de las que fallaron
   const failed = Object.keys(D.errors);
   if (failed.length) await run(failed);
+  if (salta) normSalta(D, city);
   return D;
 }
+
+// Lleva parcelas y manzanas de IDESA a los campos que usa la ficha (pensada para el parcelario de Córdoba)
+function normSalta(D, city) {
+  const sinLetra = function (x) { x = S_(x); return x && x !== '0' ? x : ''; };
+  D.parcela.forEach(function (f) {
+    const p = f.properties;
+    const mz = S_(p.nro_manzan) + sinLetra(p.let_manzan), pa = S_(p.nro_parcel) + sinLetra(p.let_parcel);
+    const desig = (S_(p.seccion) ? 'Sección ' + S_(p.seccion).replace(/^0/, '') + ' · ' : '') + (mz ? 'Manzana ' + mz : '') + (pa ? ' · Parcela ' + pa : '');
+    f.properties = Object.assign({}, p, {
+      Nomenclatura: S_(p.vinculacio), Nro_Cuenta: p.catastro ? String(p.catastro) : '',
+      Estado: S_(p.categoria), desig_oficial: desig, localidad: city.nombre, departamento: 'Depto. ' + S_(p.departa),
+      _nom: p.catastro ? 'Catastro ' + p.catastro : (desig || 'Parcela'), _fuente: 'IDESA'
+    });
+  });
+  const mzNom = function (f) { const p = f.properties; p.nomenclatura = S_(p.cod_manzan) || S_(p.nomenclatura) || String(f.id || ''); };
+  D.manzana.forEach(mzNom); D.vecinas.forEach(mzNom);
+}
+function fuenteTxt(city) {
+  if (provDe(city) === 'salta') return 'catastro provincial de IDESA' + (city && city.cpua ? ' y distritos del CPUA 2025 de la Municipalidad de Salta (IDEMSa)' : '');
+  return 'catastro provincial y capa "Normativas Urbanas: Ocupación del Suelo" de IDECOR';
+}
+// Nombre corto de la parcela para títulos y listados
+function nomCorta(pp) { return pp ? (pp._nom || 'Parcela ' + nomMuni(pp.Nomenclatura)) : ''; }
 
 /* ═══════ Utilidades ═══════ */
 const nf = function (x, d) { return x == null || !isFinite(x) ? '—' : Number(x).toLocaleString('es-AR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); };
@@ -1149,7 +1200,11 @@ function normaLocal(v, meta) {
     altura_maxima: v.hMax || null,
     pisos_maximos: v.pisos ? 'Planta Baja + ' + Math.max(0, Math.round(v.pisos) - 1) : '',
     retiro_frente: v.rf ? fmtC(v.rf) + ' m' : '',
-    otros_retiros: v.rfo ? 'Retiro de Fondo: ' + fmtC(v.rfo) + ' m' : ''
+    otros_retiros: (function () {
+      // CPUA de Salta: fondo = 1/3 de la altura (mínimo 4 m) cuando no se carga un valor
+      const rfo = v.rfo || (meta.fondoH && v.hMax ? Math.max(4, v.hMax / 3) : null);
+      return rfo ? 'Retiro de Fondo: ' + fmtC(rfo) + ' m' + (meta.fondoEsq ? ' excepto en esquina' : '') : '';
+    })()
   });
   // FOS y FOT se asignan después de parsear: la heurística de "valores cruzados" de la 8256 no aplica acá
   N.fos = v.fos != null ? v.fos / 100 : null;
@@ -1170,11 +1225,55 @@ function normaNU(p) {
   if (N.noCalc) N.noCalcReason = 'La capa provincial no trae valores numéricos suficientes para esta zona: cargalos a mano.';
   return N;
 }
+/* ═══════ Salta capital: CPUA 2025 (Ord. 16.486), Anexo 4.2, fichas por distrito ═══════
+   Caso base: FOT privado y altura con FOT privado. fondo 'H' = 1/3 de la altura, mínimo 4 m, sin retiro en esquina (nota *8). */
+const CPUA = {
+  RM1: { sup: 400, fr: 10, fot: 4.9, fotPub: 2.8, fos: 0.7, jardin: 0, fondo: 'H', h: 21, hPub: 33 },
+  RM2: { sup: 250, fr: 10, fot: 3.5, fotPub: 0.7, fos: 0.7, jardin: 0, fondo: 'H', h: 15, hPub: 18 },
+  RM3: { sup: 250, fr: 10, fot: 2.4, fos: 0.6, jardin: 3, fondo: 4, h: 12 },
+  RM4: { sup: 400, fr: 10, fot: 1.65, fos: 0.55, jardin: 3, fondo: 6, h: 9, nota: 'Contra el eje medianero de fondo se admiten en PB quinchos, lavaderos y servicios (nota *10). Sin perímetro libre.' },
+  RM5: { sup: 400, fr: 14, fot: 1.1, fos: 0.55, jardin: 3, fondo: 6, h: 7.5, nota: 'Contra el eje medianero de fondo se admiten en PB quinchos, lavaderos y servicios (nota *10). Sin perímetro libre. En el sector San Luis rige la ficha de caracterización del distrito (nota *14).' },
+  CC1: { sup: 300, fr: 10, fot: 6.3, fotPub: 1.4, fos: 0.7, jardin: 0, fondo: 'H', h: 27, hPub: 33, nota: 'Sobre Av. Belgrano (Sarmiento a Luis Burela): retiro de jardín de 3 m y basamento mínimo de 5 m (nota *11). En Av. Belgrano de Sarmiento a pasaje Castro la altura máxima es 18 m (nota *5).' },
+  CC2: { sup: 300, fr: 10, fot: 1.4, fos: 0.7, jardin: 0, fondo: 'H', h: 7.5, nota: 'Sin perímetro libre. Contra el eje medianero de fondo se admiten en PB quinchos, lavaderos y servicios (nota *10).' },
+  CC3: { sup: 400, fr: 10, fot: 5.4, fotPub: 1.2, fos: 0.6, jardin: 0, fondo: 'H', h: 27, hPub: 33 },
+  CC4: { sup: 400, fr: 10, fot: 3.6, fotPub: 1.2, fos: 0.6, jardin: 0, fondo: 'H', h: 19, hPub: 24, nota: 'El cuadro general del Anexo 4.1 dice 18 m y la ficha del distrito 19 m: se usó la ficha. En CC4 San Luis (al sur del Río Arenales y al oeste del FFCC) rigen otros indicadores: 2.500 m², FOT 2,1, FOS 0,5, retiros 5 m de jardín y 6 m laterales.' },
+  CC5: { sup: 300, fr: 10, fot: 3.0, fotPub: 1.2, fos: 0.6, jardin: 0, fondo: 'H', h: 15, hPub: 21, nota: 'La ficha trae una segunda fila para un sector del distrito (600 m², FOT 1,8, jardín 5 m, fondo 4 m, 9 m de altura): verificar en qué sector cae el lote.' },
+  CC6: { sup: 300, fr: 10, fot: 6.3, fotPub: 1.4, fos: 0.7, jardin: 0, fondo: 'H', h: 27, hPub: 33 },
+  AC1: { sup: 300, fr: 10, fot: 4.1, fos: 0.7, jardin: 0, fondo: 'H', h: 21, prac: true },
+  AC2: { sup: 300, fr: 10, fot: 3.0, fos: 0.7, jardin: 0, fondo: 'H', h: 15, prac: true },
+  AC3: { sup: 300, fr: 10, fot: 2.4, fos: 0.7, jardin: 0, fondo: 'H', h: 12, prac: true },
+  AC4: { sup: 300, fr: 10, fot: 1.1, fos: 0.55, jardin: 3, fondo: 3, h: 7.5, prac: true, nota: 'El cuadro general dice FOT 1,4 y FOS 0,7; la ficha del distrito, FOT 1,1 y FOS 0,55: se usó la ficha.' }
+};
+const CPUA_ORD = 'CPUA 2025 (Ord. 16.486)';
+function cpuaClave(d) { return S_(d).toUpperCase().replace(/\s+/g, ' ').replace(/^(RM|CC|AC)\s?(\d).*$/, '$1$2'); }
+function cpuaSinTabla(d) {
+  const k = S_(d).toUpperCase();
+  if (/^DSA/.test(k)) return 'Distrito suburbano autosustentable: los indicadores cambian según el uso (ficha del Anexo 4.3).';
+  if (/^(RN|PN|FU|NA|NO URBANO)/.test(k)) return 'Área no urbanizable o de preservación: ver la ficha del Anexo 4.4.';
+  if (/^(PIU|EE|PI)\b/.test(k)) return 'Distrito especial: los indicadores salen del Proyecto Estratégico (Parte III, Título I, Capítulo V).';
+  if (/^(PA|PP)\b/.test(k)) return 'Parque: según la Ord. 15.675 y el Art. 16 inc. 5.';
+  if (/^(M8|RSO|RM$|RB|NC|MC)/.test(k)) return 'Distrito del Acceso Este: se rige por el Convenio Urbanístico Ord. 16.330/24.';
+  return 'Este distrito no tiene ficha de indicadores en el Anexo 4.2.';
+}
+function normaCPUA(p) {
+  const d = S_(p.DISTRITO) || S_(p.DISTRITO_APP);
+  const t = CPUA[cpuaClave(d)];
+  const meta = { zona: d, ord: CPUA_ORD, cpua: t || null, fondoH: !!(t && t.fondo === 'H'), fondoEsq: true };
+  if (!t) {
+    const N0 = normaLocal({}, meta);
+    N0.etiqueta = 'Distrito ' + d; N0.noCalc = true; N0.noCalcReason = cpuaSinTabla(d) + ' Cargá los parámetros a mano.';
+    return N0;
+  }
+  const N = normaLocal({ fos: t.fos * 100, fot: t.fot, hMax: t.h, rf: t.jardin || null, rfo: t.fondo === 'H' ? null : t.fondo }, meta);
+  N.etiqueta = 'Distrito ' + d;
+  return N;
+}
+
 // Valores iniciales del editor de parámetros a partir de la norma de la capa
 function npDesde(N) {
   const r = function (x) { return x == null ? '' : Math.round(x * 100) / 100; };
   if (!N) return { fos: '', fot: '', hMax: '', pisos: '', rf: '', rfo: '' };
-  return { fos: N.fos != null ? r(N.fos * 100) : '', fot: r(N.fot), hMax: r(N.hMax), pisos: N.pisosMax || '', rf: N.fixedFront || '', rfo: N.back || '' };
+  return { fos: N.fos != null ? r(N.fos * 100) : '', fot: r(N.fot), hMax: r(N.hMax), pisos: N.pisosMax || '', rf: N.fixedFront || '', rfo: N.meta && N.meta.fondoH ? '' : (N.back || '') };
 }
 
 /* ═══════ Modelo del lote ═══════ */
@@ -1187,7 +1286,7 @@ function buildModel(D) {
   M.city = D.city || CORDOBA;
   M.local = esLocal(M.city);
   // normas de ocupación (puede haber superposición: convenio + zona base)
-  const normas = M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
+  const normas = M.city.cpua ? D.cpua.map(function (f) { return normaCPUA(f.properties); }) : M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
   normas.sort(function (a, b) {
     const sa = (a.convenio && !a.noCalc ? 0 : (!a.noCalc ? 1 : 2)), sb = (b.convenio && !b.noCalc ? 0 : (!b.noCalc ? 1 : 2));
     return sa - sb;
@@ -1332,7 +1431,7 @@ function LoteCard({ M, lote }) {
   const pp = M.pp, g = M.geo, det = M.det, D = M.D;
   const vt = D.vt[0] && D.vt[0].properties, alq = D.alq[0] && D.alq[0].properties;
   if (!pp) return (
-    <Card title="Lote" src="Parcelario IDECOR" hero>
+    <Card title="Lote" src={'Parcelario ' + fuenteCat(M.city).attr} hero>
       <div className="title-lote">Punto sin parcela catastral</div>
       <p className="sub">Tocaste la calle o un espacio público. La normativa de la zona se muestra igual; para calcular la cabida cargá superficie, frente y fondo a mano.</p>
       <p className="sub mono">{D.lat.toFixed(6)}, {D.lon.toFixed(6)}</p>
@@ -1340,10 +1439,11 @@ function LoteCard({ M, lote }) {
   );
   const muni = nomMuni(pp.Nomenclatura);
   const vutM = vt && E.num(vt.vut_pesos);
+  const ext = !!pp._fuente; // parcela de otra provincia: sin valuación ni datos de mejoras
   return (
-    <Card title="Lote" src="Parcelario y valuación · IDECOR" hero>
-      <div className="title-lote">{muni ? 'Parcela ' + muni : 'Parcela'}</div>
-      <div className="sub">{(det.esq ? 'Esquina' : g && g.pasante ? 'Frente a dos calles' : g && g.interior ? 'Lote interno' : 'Entre medianeras') + ' · ' + nf(det.S) + ' m² · ' + S_(pp.Estado).toLowerCase()}</div>
+    <Card title="Lote" src={ext ? 'Parcelario · ' + fuenteCat(M.city).attr : 'Parcelario y valuación · IDECOR'} hero>
+      <div className="title-lote">{ext ? pp._nom : muni ? 'Parcela ' + muni : 'Parcela'}</div>
+      <div className="sub">{(det.esq ? 'Esquina' : g && g.pasante ? 'Frente a dos calles' : g && g.interior ? 'Lote interno' : 'Entre medianeras') + ' · ' + nf(det.S) + ' m²' + (S_(pp.Estado) ? ' · ' + S_(pp.Estado).toLowerCase() : '')}</div>
       <div className="tags" style={{ marginTop: 8 }}>
         {lote && <EstadoTag k={lote.estado} />}
         {M.normas[0] && <span className="tag tag-ac">{M.normas[0].etiqueta}</span>}
@@ -1357,13 +1457,13 @@ function LoteCard({ M, lote }) {
         <KV items={[
           ['Localidad', M.local ? (S_(pp.localidad) || M.city.nombre) + (S_(pp.departamento) ? ' · ' + S_(pp.departamento) : '') : null],
           ['Designación', M.local && S_(pp.desig_oficial) ? S_(pp.desig_oficial) : null],
-          ['Nomenclatura', muni + '  (prov. ' + pp.Nomenclatura + ')', true],
-          ['Cuenta', String(pp.Nro_Cuenta || ''), true],
-          ['Superficie catastral', nf(det.S, 2) + ' m²' + (det.Sgeo && Math.abs(det.Sgeo - det.S) / det.S > 0.05 ? '  (polígono: ' + nf(det.Sgeo) + ' m²)' : ''), true],
+          ['Nomenclatura', ext ? S_(pp.Nomenclatura) : muni + '  (prov. ' + pp.Nomenclatura + ')', true],
+          [ext ? 'Matrícula catastral' : 'Cuenta', String(pp.Nro_Cuenta || ''), true],
+          [ext ? 'Superficie (polígono)' : 'Superficie catastral', nf(det.S, 2) + ' m²' + (det.Sgeo && Math.abs(det.Sgeo - det.S) / det.S > 0.05 ? '  (polígono: ' + nf(det.Sgeo) + ' m²)' : ''), true],
           ['Frente', g && g.frentes.length ? g.frentes.map(function (x) { return n2(x.L) + ' m'; }).join(' + ') + (g.ochava ? ' + ochava' : '') : (g && g.frenteEst ? '≈ ' + n2(g.frenteEst) + ' m (estimado)' : null), true],
           ['Fondo', g && g.fondoMax ? n2(g.fondoMax) + ' m máx. · ' + n2(g.fondoMedio) + ' m medio' : null, true],
           ['Ancho de calle', g && g.frentes.length ? g.frentes.map(function (x) { return x.ancho ? '≈ ' + nf(x.ancho, 1) + ' m' : 'sin dato'; }).join(' · ') : null, true],
-          ['Superficie cubierta', pp.Superficie_Mejoras ? nf(pp.Superficie_Mejoras) + ' m² existentes' : 'Sin mejoras registradas', true],
+          ['Superficie cubierta', pp.Superficie_Mejoras ? nf(pp.Superficie_Mejoras) + ' m² existentes' : (ext ? null : 'Sin mejoras registradas'), true],
           ['Cuentas', pp.Cantidad_Cuentas > 1 ? pp.Cantidad_Cuentas + ' (propiedad horizontal)' : null],
           ['Valuación fiscal', money(E.num(pp.Valuacion)), true],
           ['VUT fiscal', pp.vut_vigente ? money(pp.vut_vigente) + '/m²' : null, true],
@@ -1372,7 +1472,8 @@ function LoteCard({ M, lote }) {
         ]} />
       </div>
       {g && g.notes.length > 0 && <div className="alert">{g.notes.join(' ')}</div>}
-      <p className="small muted" style={{ marginTop: 8 }}>Valor de la tierra 2025 y alquiler enero 2026: estimaciones de IDECOR a partir del Observatorio del Mercado Inmobiliario. La valuación fiscal es la vigente en Catastro provincial.</p>
+      {ext ? <p className="small muted" style={{ marginTop: 8 }}>La superficie sale del polígono del catastro provincial de Salta (IDESA); la de la mensura puede diferir. Sin datos de valuación ni de mejoras en la capa pública.</p>
+        : <p className="small muted" style={{ marginTop: 8 }}>Valor de la tierra 2025 y alquiler enero 2026: estimaciones de IDECOR a partir del Observatorio del Mercado Inmobiliario. La valuación fiscal es la vigente en Catastro provincial.</p>}
     </Card>
   );
 }
@@ -1420,7 +1521,7 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
   const used = r && r.rows ? r.rows.filter(function (x) { return x.area > 1e-6; }) : [];
   const limTxt = !r || r.error ? '' : r.limit === 'FOT' ? 'Limita el FOT' : r.limit === 'FOS' ? 'Limita el FOS' : r.limit === 'Retiros' ? 'Limitan los retiros' : 'Limita el perfil';
   return (
-    <Card title="Cabida máxima" src={M.local ? (N0 ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
+    <Card title="Cabida máxima" src={M.local ? (N0 && N0.meta && N0.meta.cpua ? 'Indicadores de la ficha del CPUA, editables' : N0 && !N0.noCalc ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
       {M.normas.length > 1 && <label className="fld" style={{ marginBottom: 10 }}>
         <span>Norma aplicada (el punto cae en {M.normas.length} polígonos)</span>
         <span className="row"><select value={normaSel != null ? normaSel : M.normas.indexOf(N0)} onChange={function (e) { setNormaSel(parseInt(e.target.value, 10)); }}>
@@ -1489,9 +1590,11 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
 /* ── Editor de parámetros para localidades del interior ── */
 function ParamsLocal({ M, N0, np, setNp, onReset }) {
   const nu = N0 && N0.meta && N0.meta.nu;
-  const f = function (k, label, unit, step) {
-    return <label className="fld"><span>{label}</span><span className="row"><input type="number" inputMode="decimal" step={step || '0.01'} min="0" value={np[k] == null ? '' : np[k]} onChange={setNp(k)} /><span className="u">{unit}</span></span></label>;
+  const meta = (N0 && N0.meta) || {};
+  const f = function (k, label, unit, step, ph) {
+    return <label className="fld"><span>{label}</span><span className="row"><input type="number" inputMode="decimal" step={step || '0.01'} min="0" value={np[k] == null ? '' : np[k]} onChange={setNp(k)} placeholder={ph || ''} /><span className="u">{unit}</span></span></label>;
   };
+  const origen = meta.cpua ? 'Valores de la ficha del distrito ' + meta.zona + ' (' + meta.ord + ', Anexo 4.2).' : N0 && meta.ord === CPUA_ORD ? 'El distrito ' + meta.zona + ' no tiene ficha numérica: cargá los valores a mano.' : N0 ? 'Valores de la capa provincial (' + (meta.ord || 'ordenanza local') + ').' : 'Este punto no tiene zona cargada: cargá los valores del código urbano de ' + M.city.nombre + '.';
   // Textos de la capa que no se pudieron leer como número: quedan a la vista para cargarlos a mano
   const txt = [];
   if (nu) {
@@ -1502,7 +1605,7 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
   return <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--b1)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span className={'niv niv-' + M.city.nivel}>Nivel {M.city.nivel}</span>
-      <span className="small muted">{N0 ? 'Valores de la capa provincial (' + (N0.meta.ord || 'ordenanza local') + '). Corregilos si el código dice otra cosa.' : 'Este punto no tiene zona en la capa provincial: cargá los valores del código urbano de ' + M.city.nombre + '.'}</span>
+      <span className="small muted">{origen}{N0 ? ' Corregilos si el código dice otra cosa.' : ''}</span>
     </div>
     <div className="np-grid">
       {f('fos', 'FOS', '%', '1')}
@@ -1510,24 +1613,64 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
       {f('hMax', 'Altura máxima', 'm', '0.5')}
       {f('pisos', 'Plantas máx.', 'n°', '1')}
       {f('rf', 'Retiro de frente', 'm', '0.5')}
-      {f('rfo', 'Retiro de fondo', 'm', '0.5')}
+      {f('rfo', 'Retiro de fondo', 'm', '0.5', meta.fondoH ? '1/3 H · mín. 4' : '')}
     </div>
+    {meta.fondoH && !np.rfo && <p className="small muted" style={{ marginTop: 6 }}>Retiro de fondo: 1/3 de la altura, mínimo 4 m, sin retiro en esquina (CPUA, nota 8). Se recalcula con la altura; escribí un valor para fijarlo.</p>}
     {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) { return <li key={i}><b>{x[0]} según la capa:</b> {x[1]}</li>; })}</ul>}
-    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>Volver a los valores de la capa</button>}
+    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : 'Volver a los valores de la capa'}</button>}
   </div>;
+}
+
+/* ── Ficha del distrito del CPUA 2025 (Salta capital) ── */
+function NormaCPUACard({ M }) {
+  const c = M.city;
+  const fs = M.D.cpua || [];
+  const m2 = function (x) { return x != null ? nf(x) + ' m²' : null; };
+  return <Card title="Normativa" src="IDEMSa · Zonificación CPUA 2025">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+      <span className={'niv niv-' + c.nivel}>Nivel {c.nivel} · {NIVELES[c.nivel][0]}</span>
+      <b>{c.nombre}</b><span className="small muted">· {CPUA_ORD}</span>
+    </div>
+    <p className="small muted">El distrito sale de la capa municipal; los indicadores, de la ficha del distrito en el Anexo 4.2 del código. La capa no trae los valores.</p>
+    {fs.length === 0 && <div className="alert">El punto no cae en ningún distrito del CPUA (puede ser vía pública o estar fuera del ejido).</div>}
+    {fs.map(function (f, i) {
+      const d = S_(f.properties.DISTRITO) || S_(f.properties.DISTRITO_APP);
+      const t = CPUA[cpuaClave(d)];
+      return <div key={i} style={{ marginTop: 10 }}>
+        <div className="title-lote" style={{ fontSize: 16 }}>Distrito {d}</div>
+        {!t && <div className="alert">{cpuaSinTabla(d)}</div>}
+        {t && <KV items={[
+          ['Superficie mínima', m2(t.sup), true],
+          ['Frente mínimo', t.fr + ' m', true],
+          ['FOS', nf(t.fos * 100) + '%', true],
+          ['FOT privado', nf(t.fot, 2), true],
+          ['FOT público', t.fotPub ? '+ ' + nf(t.fotPub, 2) + ' (suelo creado, según planes de incentivo)' : null],
+          ['Altura máxima', n2(t.h) + ' m' + (t.hPub ? ' · ' + n2(t.hPub) + ' m con FOT público' : ''), true],
+          ['Retiro de jardín', t.jardin ? n2(t.jardin) + ' m' : 'sin retiro', true],
+          ['Retiro de fondo', t.fondo === 'H' ? '1/3 de la altura, mínimo 4 m; sin retiro en esquina' : n2(t.fondo) + ' m; sin retiro en esquina', true]
+        ]} />}
+        {t && M.det.S && M.det.S < t.sup && <div className="alert">El lote ({nf(M.det.S)} m²) está por debajo de la subdivisión mínima del distrito ({nf(t.sup)} m²).</div>}
+        {t && t.prac && <div className="alert">Área Centro: los indicadores definitivos los fija el PRAC (Plan de Revitalización del Área Centro). La ficha solo da los rangos para la capacidad constructiva transferible, así que esta cabida es indicativa. Revisar también si el inmueble está en el Anexo 8 (patrimonio).</div>}
+        {t && t.nota && <div className="alert info">{t.nota}</div>}
+      </div>;
+    })}
+    <p className="small muted" style={{ marginTop: 10 }}>No se modelan: perímetro libre, basamento, pasajes (nota 4), FOT público, transferencia de potencial ni restricciones ANAC. Usos permitidos en la ficha de cada distrito.</p>
+  </Card>;
 }
 
 /* ── Ficha de normativa para localidades del interior ── */
 function NormaLocalCard({ M }) {
+  if (M.city.cpua) return <NormaCPUACard M={M} />;
   const c = M.city, nv = NIVELES[c.nivel];
   const fs = M.D.nu || [];
+  const salta = provDe(c) === 'salta';
   return <Card title="Normativa" src={c.nivel >= 2 ? 'IDECOR · Normativas Urbanas: Ocupación del Suelo' : 'Sin capa de zonificación'}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
       <span className={'niv niv-' + c.nivel}>Nivel {c.nivel} · {nv[0]}</span>
       <b>{c.nombre}</b>{c.ord && <span className="small muted">· {c.ord}</span>}
     </div>
     <p className="small muted">{nv[1]}</p>
-    {fs.length === 0 && <div className="alert">{c.nivel >= 2 ? 'El punto no cae en ninguna zona de la capa provincial (puede ser vía pública, zona rural o un sector sin cargar).' : 'Esta localidad no publica su zonificación en IDECOR.'} Los parámetros de la cabida se cargan a mano desde el código urbano local.</div>}
+    {fs.length === 0 && <div className="alert">{c.nivel >= 2 ? 'El punto no cae en ninguna zona de la capa provincial (puede ser vía pública, zona rural o un sector sin cargar).' : (salta ? 'Esta localidad no publica su zonificación en IDESA.' : 'Esta localidad no publica su zonificación en IDECOR.')} Los parámetros de la cabida se cargan a mano desde el código urbano local.</div>}
     {fs.map(function (f, i) {
       const p = f.properties;
       return <div key={i} style={{ marginTop: 10 }}>
@@ -1751,7 +1894,7 @@ function resumen(M) {
   const t = [];
   const c = M.city || CORDOBA;
   t.push('NORMATIVA Y CABIDA — ' + c.nombre + (M.local ? ' (nivel ' + c.nivel + ': ' + NIVELES[c.nivel][0].toLowerCase() + ')' : ''));
-  t.push(pp ? 'Parcela ' + nomMuni(pp.Nomenclatura) + ' · cuenta ' + pp.Nro_Cuenta : 'Punto ' + M.D.lat.toFixed(6) + ', ' + M.D.lon.toFixed(6));
+  t.push(pp ? nomCorta(pp) + (pp._fuente ? ' · ' + S_(pp.desig_oficial) : ' · cuenta ' + pp.Nro_Cuenta) : 'Punto ' + M.D.lat.toFixed(6) + ', ' + M.D.lon.toFixed(6));
   if (pp) t.push('Superficie ' + nf(M.det.S, 2) + ' m² · frente ' + n2(L.a) + ' m · fondo ' + n2(L.f) + ' m · calle ' + nf(L.W, 1) + ' m' + (L.esq ? ' · esquina' : ''));
   if (N) t.push('Zona: ' + N.etiqueta + ' (' + (N.ordModif || N.ordOriginal) + ') · FOS ' + (N.fos != null ? nf(N.fos * 100) + '%' : '—') + ' · FOT ' + (N.fot != null ? nf(N.fot, 2) : '—') + ' · altura ' + (N.hMax ? n2(N.hMax) + ' m' : 'sin límite'));
   if (r && !r.error) {
@@ -1764,7 +1907,7 @@ function resumen(M) {
   if (D.app[0]) t.push('Patrimonio: ' + S_(D.app[0].properties.nombre_app));
   if (D.arq[0]) t.push('Área arqueológica: ' + S_(D.arq[0].properties.escalas));
   if (M.convenioSinParam) t.push('Convenio urbanístico: ' + M.convenioSinParam.ordModif);
-  t.push(M.local ? 'Fuente: catastro provincial y capa Normativas Urbanas de IDECOR; parámetros revisados a mano. Estimación preliminar, verificar con el código urbano y la visación municipal.' : 'Fuente: capas oficiales IDECOR / Municipalidad de Córdoba. Estimación preliminar, verificar con visación municipal.');
+  t.push(M.local ? 'Fuente: ' + fuenteTxt(M.city) + '; parámetros revisados a mano. Estimación preliminar, verificar con el código urbano y la visación municipal.' : 'Fuente: capas oficiales IDECOR / Municipalidad de Córdoba. Estimación preliminar, verificar con visación municipal.');
   t.push(location.origin + location.pathname + '#' + M.D.lat.toFixed(6) + ',' + M.D.lon.toFixed(6));
   return t.join('\n');
 }
@@ -1781,8 +1924,17 @@ function MapView({ onPick, M, overlay, active, focus, city }) {
     const w = function (layer, extra) { return L.tileLayer.wms(WMS, Object.assign({ layers: 'idecor:' + layer, format: 'image/png', transparent: true, version: '1.1.1', attribution: esLocal(city) ? 'IDECOR' : 'IDECOR · Municipalidad de Córdoba' }, extra || {})); };
     if (esLocal(city)) {
       // Interior: catastro provincial y, si la localidad está en la capa provincial, su zonificación
-      const ov = { 'Parcelas': w('parcelas', { minZoom: 16, opacity: 0.85 }).addTo(map) };
-      if (city.nivel >= 2) ov['Ocupación del suelo'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
+      let ov;
+      if (provDe(city) === 'salta') {
+        const F = fuenteCat(city);
+        const ws = function (url, layer, extra) { return L.tileLayer.wms(url, Object.assign({ layers: layer, format: 'image/png', transparent: true, version: '1.1.1' }, extra)); };
+        ov = {};
+        if (city.cpua) ov['Distritos CPUA 2025'] = ws(SALTA_MUNI + 'wms', CPUA_LAYER, { opacity: 0.45, attribution: 'IDEMSa · Municipalidad de Salta' }).addTo(map);
+        ov['Parcelas'] = ws(F.wms, F.par, { minZoom: 16, opacity: 0.85, attribution: 'IDESA · Provincia de Salta' }).addTo(map);
+      } else {
+        ov = { 'Parcelas': w('parcelas', { minZoom: 16, opacity: 0.85 }).addTo(map) };
+        if (city.nivel >= 2) ov['Ocupación del suelo'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
+      }
       L.control.layers({ 'Mapa gris (IGN)': base, 'Argenmap (IGN)': argen, 'Calles (OSM)': osm, 'Satélite': sat }, ov, { collapsed: true }).addTo(map);
       L.control.scale({ imperial: false }).addTo(map);
       grp.current = L.layerGroup().addTo(map);
@@ -1846,16 +1998,35 @@ async function buscar(q, city) {
     if (Math.abs(a) > Math.abs(b)) { const t = a; a = b; b = t; } // lat ~ -31, lon ~ -64
     return { go: { lat: a, lon: b } };
   }
+  // Salta: matrícula catastral (número de catastro) o nomenclatura de 14 caracteres de IDESA
+  if (provDe(city) === 'salta') {
+    const F = fuenteCat(city);
+    const ir = function (fs) { const p = interiorPoint(fs[0].geometry); return { go: { lat: p[1], lon: p[0] } }; };
+    if (/^\d{1,7}$/.test(q)) {
+      const cql = 'catastro=' + parseInt(q, 10) + (city.cpua ? " AND departa='01'" : '');
+      const fs = await wfs(F.par, cql, { base: F.base, count: 8 });
+      if (!fs.length) return { error: 'No encontré la matrícula ' + q + (city.cpua ? ' en el departamento Capital.' : ' en el catastro provincial.') };
+      if (fs.length === 1 || city.cpua) return ir(fs);
+      return { list: fs.map(function (f) { const p = interiorPoint(f.geometry); return { label: 'Matrícula ' + q + ' · Depto. ' + S_(f.properties.departa) + ' · ' + S_(f.properties.vinculacio), lat: p[1], lon: p[0] }; }) };
+    }
+    if (/^[0-9A-Z]{14}$/i.test(q.replace(/[\s-]/g, ''))) {
+      const fs = await wfs(F.par, "vinculacio='" + q.replace(/[\s-]/g, '').toUpperCase() + "'", { base: F.base, count: 1 });
+      if (!fs.length) return { error: 'No encontré la nomenclatura ' + q + ' en el catastro provincial.' };
+      return ir(fs);
+    }
+  }
   let prov = null;
   // La nomenclatura corta (04-02-065-002) solo se puede completar en Córdoba capital; en el interior va la provincial de 16 dígitos
-  if (!local && /^\d{1,2}\s*-\s*\d{1,2}\s*-\s*\d{1,3}\s*-\s*\d{1,3}$/.test(q)) prov = nomProv(q.replace(/\s/g, ''));
+  if (provDe(city) !== 'cordoba') { /* sin nomenclatura de Córdoba */ }
+  else if (!local && /^\d{1,2}\s*-\s*\d{1,2}\s*-\s*\d{1,3}\s*-\s*\d{1,3}$/.test(q)) prov = nomProv(q.replace(/\s/g, ''));
   else if (/^\d{16}$/.test(q)) prov = q;
+  const enCba = provDe(city) === 'cordoba';
   if (prov) {
     const fs = await wfs('parcelas', "Nomenclatura='" + prov + "'", { count: 1 });
     if (!fs.length) return { error: 'No encontré la parcela ' + q + ' en el parcelario provincial.' };
     const p = interiorPoint(fs[0].geometry); return { go: { lat: p[1], lon: p[0] } };
   }
-  if (/^\d{10,13}$/.test(q)) {
+  if (enCba && /^\d{10,13}$/.test(q)) {
     const fs = await wfs('parcelas', 'Nro_Cuenta=' + q, { count: 1 });
     if (!fs.length) return { error: 'No encontré la cuenta ' + q + '.' };
     const p = interiorPoint(fs[0].geometry); return { go: { lat: p[1], lon: p[0] } };
@@ -1866,8 +2037,8 @@ async function buscar(q, city) {
   const lejos = function (lat, lon) { return Math.hypot((lat - city.c[0]) * 111, (lon - city.c[1]) * 94) > 25; };
   async function georef(txt, sinLoc) {
     try {
-      const zona = local ? (sinLoc ? '' : '&localidad_censal=' + encodeURIComponent(city.nombre)) : '&departamento=Capital';
-      const u = 'https://apis.datos.gob.ar/georef/api/direcciones?direccion=' + encodeURIComponent(txt) + '&provincia=' + encodeURIComponent('Córdoba') + zona + '&max=6';
+      const zona = local ? (sinLoc ? '' : '&localidad_censal=' + encodeURIComponent(city.georefLoc || city.nombre)) : '&departamento=Capital';
+      const u = 'https://apis.datos.gob.ar/georef/api/direcciones?direccion=' + encodeURIComponent(txt) + '&provincia=' + encodeURIComponent(provInfo(provDe(city)).georef) + zona + '&max=6';
       const j = await (await fetch(u)).json();
       (j.direcciones || []).forEach(function (d) { if (d.ubicacion && d.ubicacion.lat != null && !(local && lejos(d.ubicacion.lat, d.ubicacion.lon))) out.push({ label: d.nomenclatura, lat: d.ubicacion.lat, lon: d.ubicacion.lon, addr: true }); });
     } catch (e) { }
@@ -1891,15 +2062,17 @@ async function buscar(q, city) {
       });
     } catch (e) { }
   }
-  if (!out.length) return { error: local ? 'No encontré "' + q + '" en ' + city.nombre + '. Probá con calle y altura, la nomenclatura provincial de 16 dígitos, la cuenta o tocá el lote en el mapa.' : 'No encontré "' + q + '". Probá con calle y altura (ej. "Obispo Trejo 300"), nomenclatura (04-02-065-002) o cuenta.' };
+  if (!out.length) return { error: local ? 'No encontré "' + q + '" en ' + city.nombre + '. Probá con calle y altura, ' + (enCba ? 'la nomenclatura provincial de 16 dígitos, la cuenta' : 'la matrícula catastral') + ' o tocá el lote en el mapa.' : 'No encontré "' + q + '". Probá con calle y altura (ej. "Obispo Trejo 300"), nomenclatura (04-02-065-002) o cuenta.' };
   if (out.length === 1) return { go: out[0] };
   return { list: out };
 }
 
 // Georef ubica la altura sobre el eje de la calle: se toma la parcela más cercana a ese punto
-async function snapParcela(lat, lon) {
+async function snapParcela(lat, lon, city) {
   try {
-    const fs = await wfs('parcelas', 'DWITHIN(geom,SRID=4326;POINT(' + lon + ' ' + lat + '),35,meters)', { props: 'Nomenclatura,geom', count: 30, timeout: 12000 });
+    const F = fuenteCat(city);
+    const ext = provDe(city) !== 'cordoba';
+    const fs = await wfs(F.par, 'DWITHIN(geom,SRID=4326;POINT(' + lon + ' ' + lat + '),35,meters)', { base: F.base, props: ext ? null : 'Nomenclatura,geom', count: 30, timeout: 12000 });
     if (!fs.length) return null;
     const P = E.makeProj(lon, lat);
     let best = null, bd = Infinity;
@@ -2178,7 +2351,7 @@ function snapshot(M) {
   return {
     v: 1, fecha: new Date().toISOString(),
     ciudad: M.city ? M.city.id : 'cordoba',
-    ciudadObj: M.city && M.city.nivel === 1 ? { id: M.city.id, nombre: M.city.nombre, nivel: 1, c: M.city.c, z: M.city.z, depto: M.city.depto || '' } : null,
+    ciudadObj: M.city && M.city.nivel === 1 ? { id: M.city.id, prov: provDe(M.city), nombre: M.city.nombre, georefLoc: M.city.georefLoc || '', nivel: 1, c: M.city.c, z: M.city.z, depto: M.city.depto || '' } : null,
     norma: packNorma(N),
     // En el interior la norma usada puede estar editada a mano: para avisar cambios se compara la de la capa
     normaCapa: M.local ? packNorma(M.cabidaN0) : null,
@@ -2315,11 +2488,12 @@ function LoginScreen({ onDone }) {
     <div className="login-brand">
       <div className="login-logo">AC</div>
       <h1>Análisis de Cabida</h1>
-      <p className="login-sub">Córdoba capital y el interior</p>
+      <p className="login-sub">Córdoba · Salta</p>
       <ul>
         <li>La normativa oficial de cada lote al instante: ocupación, uso y fraccionamiento del suelo, patrimonio, loteos y ordenanzas.</li>
         <li>Cabida máxima en m² con la geometría real del lote y las reglas vigentes de la Ord. 8256.</li>
         <li>Interior provincial: catastro de cualquier localidad y zonificación de 41 ciudades más desde la capa provincial de IDECOR.</li>
+        <li>Salta: catastro provincial de IDESA y, en Salta capital, distritos e indicadores del CPUA 2025.</li>
         <li>Cartera de lotes de tu empresa con precio, incidencia, notas y escenarios.</li>
       </ul>
       <p className="small">Datos de IDECOR y la Municipalidad de Córdoba, consultados en vivo.</p>
@@ -2338,16 +2512,43 @@ function LoginScreen({ onDone }) {
   </div>;
 }
 
-/* ── Elección de ciudad: antes de entrar a la herramienta ── */
-function CityScreen({ onPick, onCancel, extra, actual }) {
+/* ── Elección de provincia: lo primero después de ingresar ── */
+function ProvScreen({ onPick, onCancel, actual }) {
+  return <div className="city-page"><div className="city-in">
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div>
+        <h1>¿En qué provincia está el lote?</h1>
+        <p className="small muted">Cada provincia publica su catastro en su propia infraestructura de datos; de eso depende qué se calcula solo.</p>
+      </div>
+      {onCancel && <button className="btn" onClick={onCancel}>Volver a {actual ? actual.nombre : 'la ciudad anterior'}</button>}
+    </div>
+    <div className="city-grid" style={{ marginTop: 18, gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))' }}>
+      {PROVINCIAS.map(function (p) {
+        return <button key={p.id} className="city-btn big" onClick={function () { onPick(p.id); }}>
+          <b style={{ fontSize: 16 }}>{p.nombre}</b>
+          <span style={{ whiteSpace: 'normal' }}>{p.desc}</span>
+          <span>Datos: {p.id === 'salta' ? 'IDESA · IDEMSa' : 'IDECOR'}</span>
+        </button>;
+      })}
+    </div>
+    <p className="small muted" style={{ marginTop: 16 }}>¿Necesitás otra provincia? Depende de que publique su catastro en un servicio abierto: pedila y se revisa qué hay.</p>
+  </div></div>;
+}
+
+/* ── Elección de ciudad dentro de la provincia ── */
+function CityScreen({ prov, onPick, onCancel, onProv, extra, actual }) {
+  const P = provInfo(prov);
   const [f, setF] = useState('');
   const [q, setQ] = useState('');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const t = normTxt(f);
-  const l2 = NIVEL2.filter(function (c) { return !t || normTxt(c.nombre).indexOf(t) >= 0; });
-  const l1 = NIVEL1.concat((extra || []).filter(function (c) { return !CIUDADES.some(function (x) { return x.id === c.id; }); }))
+  const deProv = function (c) { return provDe(c) === prov; };
+  const n3 = prov === 'cordoba' ? [CORDOBA] : [];
+  const n2all = prov === 'cordoba' ? NIVEL2 : CIUDADES.filter(function (c) { return deProv(c) && c.nivel === 2; });
+  const l2 = n2all.filter(function (c) { return !t || normTxt(c.nombre).indexOf(t) >= 0; });
+  const l1 = NIVEL1.filter(deProv).concat((extra || []).filter(function (c) { return deProv(c) && !CIUDADES.some(function (x) { return x.id === c.id; }); }))
     .filter(function (c, i, arr) { return arr.findIndex(function (x) { return x.id === c.id; }) === i; })
     .filter(function (c) { return !t || normTxt(c.nombre).indexOf(t) >= 0; });
   const buscarLoc = async function (e) {
@@ -2355,16 +2556,18 @@ function CityScreen({ onPick, onCancel, extra, actual }) {
     if (!q.trim()) return;
     setBusy(true); setErr(''); setRes(null);
     try {
-      const u = 'https://apis.datos.gob.ar/georef/api/localidades?nombre=' + encodeURIComponent(q.trim()) + '&provincia=' + encodeURIComponent('Córdoba') + '&max=12&campos=id,nombre,centroide,departamento.nombre';
+      const u = 'https://apis.datos.gob.ar/georef/api/localidades?nombre=' + encodeURIComponent(q.trim()) + '&provincia=' + encodeURIComponent(P.georef) + '&max=12&campos=id,nombre,centroide,departamento.nombre';
       const j = await (await fetch(u)).json();
       const ls = (j.localidades || []).map(function (l) {
         const k = normTxt(l.nombre);
-        // Si la localidad ya tiene zonificación (nivel 2) o es la capital, se usa esa configuración
-        const ya = k === 'cordoba' ? CORDOBA : NIVEL2.find(function (c) { return normTxt(c.nombre) === k; });
-        return ya || { id: 'loc:' + l.id, nombre: l.nombre, nivel: 1, c: [l.centroide.lat, l.centroide.lon], z: 15, depto: l.departamento ? l.departamento.nombre : '' };
-      });
+        const dep = l.departamento ? l.departamento.nombre : '';
+        // Si la localidad ya tiene configuración propia (capital, nivel 2), se usa esa
+        const ya = prov === 'cordoba' ? (k === 'cordoba' ? CORDOBA : NIVEL2.find(function (c) { return normTxt(c.nombre) === k; }))
+          : (k === 'salta' && /capital/i.test(dep) ? SALTA_CAP : null);
+        return ya || { id: (prov === 'cordoba' ? 'loc:' : prov + '-loc:') + l.id, prov: prov, nombre: l.nombre, georefLoc: l.nombre, nivel: 1, c: [l.centroide.lat, l.centroide.lon], z: 15, depto: dep };
+      }).filter(function (c, i, arr) { return arr.findIndex(function (x) { return x.id === c.id; }) === i; });
       setRes(ls);
-      if (!ls.length) setErr('No encontré "' + q.trim() + '" entre las localidades de la provincia.');
+      if (!ls.length) setErr('No encontré "' + q.trim() + '" entre las localidades de ' + P.nombre + '.');
     } catch (x) { setErr('No pude consultar el listado de localidades: ' + (x.message || x)); }
     setBusy(false);
   };
@@ -2374,35 +2577,37 @@ function CityScreen({ onPick, onCancel, extra, actual }) {
       <span>{c.ord || (c.depto ? 'Depto. ' + c.depto : 'Catastro provincial')}</span>
     </button>;
   };
+  const desc2 = prov === 'salta' ? 'Distrito automático desde la capa municipal e indicadores de la ficha del CPUA 2025, editables. Perímetro libre, basamento y casos especiales a mano.' : NIVELES[2][1];
   return <div className="city-page"><div className="city-in">
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
       <div>
+        <p className="small muted" style={{ marginBottom: 4 }}>Provincia de {P.nombre} · <a href="#" onClick={function (e) { e.preventDefault(); onProv(); }}>cambiar provincia</a></p>
         <h1>¿En qué ciudad está el lote?</h1>
         <p className="small muted">Cada ciudad tiene su propio código urbano. El nivel indica cuánto de ese código calcula la herramienta sola.</p>
       </div>
       {onCancel && <button className="btn" onClick={onCancel}>Volver a {actual ? actual.nombre : 'la ciudad anterior'}</button>}
     </div>
 
-    <div className="city-grp">
+    {n3.length > 0 && <div className="city-grp">
       <h2><span className="niv niv-3">Nivel 3 · {NIVELES[3][0]}</span></h2>
       <p className="small muted">{NIVELES[3][1]}</p>
-      <div className="city-grid"><Btn c={CORDOBA} big /></div>
-    </div>
+      <div className="city-grid">{n3.map(function (c) { return <Btn key={c.id} c={c} big />; })}</div>
+    </div>}
 
-    <div className="city-grp">
-      <h2><span className="niv niv-2">Nivel 2 · {NIVELES[2][0]}</span><span>{NIVEL2.length} localidades</span></h2>
-      <p className="small muted">{NIVELES[2][1]}</p>
-      <label className="fld" style={{ maxWidth: 320, marginTop: 8 }}><span className="row"><input value={f} onChange={function (e) { setF(e.target.value); }} placeholder="Filtrar por nombre" aria-label="Filtrar localidades" /></span></label>
-      <div className="city-grid">{l2.map(function (c) { return <Btn key={c.id} c={c} />; })}</div>
+    {n2all.length > 0 && <div className="city-grp">
+      <h2><span className="niv niv-2">Nivel 2 · {NIVELES[2][0]}</span>{n2all.length > 1 && <span>{n2all.length} localidades</span>}</h2>
+      <p className="small muted">{desc2}</p>
+      {n2all.length > 8 && <label className="fld" style={{ maxWidth: 320, marginTop: 8 }}><span className="row"><input value={f} onChange={function (e) { setF(e.target.value); }} placeholder="Filtrar por nombre" aria-label="Filtrar localidades" /></span></label>}
+      <div className="city-grid">{l2.map(function (c) { return <Btn key={c.id} c={c} big={n2all.length === 1} />; })}</div>
       {l2.length === 0 && <p className="small muted" style={{ marginTop: 8 }}>Ninguna localidad de nivel 2 coincide con "{f}".</p>}
-    </div>
+    </div>}
 
     <div className="city-grp">
       <h2><span className="niv niv-1">Nivel 1 · {NIVELES[1][0]}</span></h2>
-      <p className="small muted">{NIVELES[1][1]}</p>
+      <p className="small muted">{NIVELES[1][1]}{prov === 'salta' ? ' La cobertura del catastro provincial en el interior es despareja: en algunas localidades solo está el polígono del ejido.' : ''}</p>
       {l1.length > 0 && <div className="city-grid">{l1.map(function (c) { return <Btn key={c.id} c={c} />; })}</div>}
       <form onSubmit={buscarLoc} style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', maxWidth: 520 }}>
-        <input className="sin" style={{ flex: 1, minWidth: 200 }} value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="Otra localidad de la provincia (ej. Laboulaye)" aria-label="Buscar otra localidad" />
+        <input className="sin" style={{ flex: 1, minWidth: 200 }} value={q} onChange={function (e) { setQ(e.target.value); }} placeholder={'Otra localidad de ' + P.nombre + (prov === 'salta' ? ' (ej. Tartagal)' : ' (ej. Laboulaye)')} aria-label="Buscar otra localidad" />
         <button className="btn pri" type="submit" disabled={busy}>{busy ? 'Buscando…' : 'Buscar'}</button>
       </form>
       {err && <div className="alert" style={{ maxWidth: 520 }}>{err}</div>}
@@ -2695,7 +2900,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
     const pp = M.pp;
     return {
       nomenclatura: pp ? String(pp.Nomenclatura) : null,
-      nom_muni: pp ? nomMuni(pp.Nomenclatura) : null,
+      nom_muni: pp ? (pp._fuente ? S_(pp.desig_oficial) || null : nomMuni(pp.Nomenclatura)) : null,
       cuenta: pp && pp.Nro_Cuenta ? String(pp.Nro_Cuenta) : null,
       lat: M.D.lat, lon: M.D.lon,
       superficie: S || null,
@@ -2709,7 +2914,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   const agregar = async function () {
     setBusy('add'); setErr('');
     try {
-      const b = Object.assign(cuerpoAnalisis(), { nombre: (M.pp ? 'Parcela ' + nomMuni(M.pp.Nomenclatura) : 'Lote ' + M.D.lat.toFixed(5) + ', ' + M.D.lon.toFixed(5)) + (M.local ? ' · ' + M.city.nombre : ''), estado: 'en_analisis' });
+      const b = Object.assign(cuerpoAnalisis(), { nombre: (M.pp ? nomCorta(M.pp) : 'Lote ' + M.D.lat.toFixed(5) + ', ' + M.D.lon.toFixed(5)) + (M.local ? ' · ' + M.city.nombre : ''), estado: 'en_analisis' });
       if (empresaDestino) b.empresa = empresaDestino;
       const rows = await sbReq('lotes', { method: 'POST', body: b, prefer: 'return=representation' });
       const lt = rows && rows[0];
@@ -3078,11 +3283,12 @@ function App() {
   const aplicado = useRef(null);
   const [city, setCityS] = useState(loadCity);
   const [elegir, setElegir] = useState(false);
+  const [provSel, setProvSel] = useState(function () { return city ? provDe(city) : null; });
   const cityRef = useRef(city);
   cityRef.current = city;
   const local = esLocal(city);
   const setCity = function (c) {
-    cityRef.current = c; setCityS(c); storeCity(c); setElegir(false); setTab(function (t) { return t === 'ord' && esLocal(c) ? 'lote' : t; });
+    cityRef.current = c; setCityS(c); storeCity(c); setElegir(false); setProvSel(provDe(c)); setTab(function (t) { return t === 'ord' && esLocal(c) ? 'lote' : t; });
     reqId.current++; setM(null); setErr(null); setOpts(null); setOverlay(null); setBusy(false); setNormaSel(null); setQ('');
     try { history.replaceState(null, '', location.pathname); } catch (e) { }
   };
@@ -3173,7 +3379,7 @@ function App() {
 
   const goTo = async function (o) {
     if (o.approx) { setFocus({ lat: o.lat, lon: o.lon, t: Date.now() }); setBusy(false); setErr('Encontré la calle pero no la altura exacta: tocá el lote en el mapa.'); return; }
-    if (o.addr) { setBusy(true); const sp = await snapParcela(o.lat, o.lon); pick(sp ? sp.lat : o.lat, sp ? sp.lon : o.lon); return; }
+    if (o.addr) { setBusy(true); const sp = await snapParcela(o.lat, o.lon, cityRef.current); pick(sp ? sp.lat : o.lat, sp ? sp.lon : o.lon); return; }
     pick(o.lat, o.lon);
   };
   const doSearch = async function (e) {
@@ -3206,7 +3412,11 @@ function App() {
 
   if (!authOk) return <div className="ld" style={{ margin: 'auto' }}><div className="sp" /><span>Cargando…</span></div>;
   if (!sess) return <LoginScreen onDone={function (w) { setSess(w); }} />;
-  if (!city || elegir) return <CityScreen onPick={setCity} onCancel={city ? function () { setElegir(false); } : null} actual={city} extra={ciudadesCartera} />;
+  if (!city || elegir) {
+    const volver = city ? function () { setElegir(false); setProvSel(provDe(city)); } : null;
+    if (!provSel) return <ProvScreen onPick={setProvSel} onCancel={volver} actual={city} />;
+    return <CityScreen prov={provSel} onPick={setCity} onCancel={volver} onProv={function () { setProvSel(null); }} actual={city} extra={ciudadesCartera} />;
+  }
 
   return <DigCtx.Provider value={dg}>
     <div className="hdr">
@@ -3216,7 +3426,7 @@ function App() {
       </a>
       <span className="hdr-sep" style={{ color: 'var(--b0)' }}>|</span>
       <span className="hdr-title">Normativa y Cabida</span>
-      <button className="city-chip" onClick={function () { setElegir(true); }} title="Cambiar de ciudad"><span className={'niv niv-' + city.nivel} style={{ padding: '0 5px' }}>N{city.nivel}</span>{city.nombre}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg></button>
+      <button className="city-chip" onClick={function () { setElegir(true); }} title="Cambiar de ciudad o provincia"><span className={'niv niv-' + city.nivel} style={{ padding: '0 5px' }}>N{city.nivel}</span>{city.nombre}{provDe(city) !== 'cordoba' && !/salta/i.test(city.nombre) ? ' · ' + provInfo(provDe(city)).nombre : ''}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg></button>
       <div className="seg" style={{ marginLeft: 8 }}>
         <button className={tab === 'lote' ? 'on' : ''} onClick={function () { setTab('lote'); }}>Lote</button>
         {!local && <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>}
@@ -3240,7 +3450,7 @@ function App() {
         <MapView key={city.id} city={city} onPick={pick} M={M} overlay={overlay} active={tab === 'lote'} focus={focus} />
         <div className="panel">
           {err && <div className="alert" style={{ marginTop: 0, marginBottom: 10 }}>{err}</div>}
-          {busy && <div className="ld"><div className="sp" /><span>{local ? 'Consultando catastro y normativa de IDECOR…' : 'Consultando 23 capas de IDECOR para este punto…'}</span></div>}
+          {busy && <div className="ld"><div className="sp" /><span>{local ? 'Consultando catastro y normativa de ' + (provDe(city) === 'salta' ? 'IDESA e IDEMSa' : 'IDECOR') + '…' : 'Consultando 23 capas de IDECOR para este punto…'}</span></div>}
           {!M && !busy && local && <div className="card"><div className="empty">
             <h2>{city.nombre}</h2>
             <p><span className={'niv niv-' + city.nivel}>Nivel {city.nivel} · {NIVELES[city.nivel][0]}</span></p>
@@ -3282,7 +3492,7 @@ function App() {
               <EntornoCard M={M} />
               <OrdLoteCard M={M} />
             </Fragment>}
-            {M.local ? <p className="small muted">Fuente: catastro provincial y capa "Normativas Urbanas: Ocupación del Suelo" de IDECOR, consultados el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo de {M.city.nombre}.</p> : <p className="small muted">Fuente: capas WFS de IDECOR (Infraestructura de Datos Espaciales de la Provincia de Córdoba) con información de la Dirección de Planeamiento Urbano municipal y Catastro provincial, consultadas el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo.</p>}
+            {M.local ? <p className="small muted">Fuente: {fuenteTxt(M.city)}, consultados el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo de {M.city.nombre}.</p> : <p className="small muted">Fuente: capas WFS de IDECOR (Infraestructura de Datos Espaciales de la Provincia de Córdoba) con información de la Dirección de Planeamiento Urbano municipal y Catastro provincial, consultadas el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo.</p>}
           </Fragment>}
         </div>
       </div>
