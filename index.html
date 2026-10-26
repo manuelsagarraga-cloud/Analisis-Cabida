@@ -1650,7 +1650,7 @@ function NormaCPUACard({ M }) {
           ['Retiro de fondo', t.fondo === 'H' ? '1/3 de la altura, mínimo 4 m; sin retiro en esquina' : n2(t.fondo) + ' m; sin retiro en esquina', true]
         ]} />}
         {t && M.det.S && M.det.S < t.sup && <div className="alert">El lote ({nf(M.det.S)} m²) está por debajo de la subdivisión mínima del distrito ({nf(t.sup)} m²).</div>}
-        {t && t.prac && <div className="alert">Área Centro: los indicadores definitivos los fija el PRAC (Plan de Revitalización del Área Centro). La ficha solo da los rangos para la capacidad constructiva transferible, así que esta cabida es indicativa. Revisar también si el inmueble está en el Anexo 8 (patrimonio).</div>}
+        {t && t.prac && <div className="alert">Área Centro: los indicadores definitivos los fija el PRAC (Plan Regulador de Área Centro). La ficha solo da los rangos para la capacidad constructiva transferible, así que esta cabida es indicativa. Revisar también si el inmueble está en el Anexo 8 (patrimonio).</div>}
         {t && t.nota && <div className="alert info">{t.nota}</div>}
       </div>;
     })}
@@ -3440,7 +3440,7 @@ function App() {
 
     <div style={{ display: tab === 'lote' ? 'contents' : 'none' }}>
       <form className="sbar" onSubmit={doSearch}>
-        <input className="sin" value={q} onChange={function (e) { setQ(e.target.value); }} placeholder={local ? 'Dirección en ' + city.nombre + ', nomenclatura provincial (16 dígitos), cuenta o coordenadas' : 'Dirección (Obispo Trejo 300), nomenclatura (04-02-065-002), cuenta o coordenadas'} aria-label="Buscar lote" />
+        <input className="sin" value={q} onChange={function (e) { setQ(e.target.value); }} placeholder={provDe(city) === 'salta' ? 'Dirección en ' + city.nombre + ', matrícula catastral (14655), nomenclatura o coordenadas' : local ? 'Dirección en ' + city.nombre + ', nomenclatura provincial (16 dígitos), cuenta o coordenadas' : 'Dirección (Obispo Trejo 300), nomenclatura (04-02-065-002), cuenta o coordenadas'} aria-label="Buscar lote" />
         <button className="btn pri" type="submit" disabled={busy}>{busy ? 'Consultando…' : 'Buscar'}</button>
         {overlay && <span className="tag tag-ac" style={{ cursor: 'pointer' }} onClick={function () { setOverlay(null); }} title="Quitar resaltado">{overlay.label} en el mapa ✕</span>}
         <span className="shint">o tocá el lote en el mapa</span>
@@ -3454,11 +3454,11 @@ function App() {
           {!M && !busy && local && <div className="card"><div className="empty">
             <h2>{city.nombre}</h2>
             <p><span className={'niv niv-' + city.nivel}>Nivel {city.nivel} · {NIVELES[city.nivel][0]}</span></p>
-            <p style={{ marginTop: 8 }}>{NIVELES[city.nivel][1]}</p>
+            <p style={{ marginTop: 8 }}>{city.cpua ? 'Distrito automático desde la capa municipal e indicadores de la ficha del CPUA 2025, editables.' : NIVELES[city.nivel][1]}</p>
             <div className="steps">
-              <div><b>1</b><span>Buscá la dirección, la nomenclatura provincial o la cuenta, o tocá el lote en el mapa.</span></div>
-              <div><b>2</b><span>La ficha trae el lote del catastro provincial{city.nivel >= 2 ? ' y la zona con FOS, FOT y altura de la capa provincial' : ''}.</span></div>
-              <div><b>3</b><span>{city.nivel >= 2 ? 'Revisá los parámetros contra la ordenanza (' + city.ord + ') y completá retiros y plantas.' : 'Cargá FOS, FOT, altura y retiros del código urbano local para calcular la cabida.'}</span></div>
+              <div><b>1</b><span>Buscá la dirección, {provDe(city) === 'salta' ? 'la matrícula catastral o la nomenclatura de IDESA' : 'la nomenclatura provincial o la cuenta'}, o tocá el lote en el mapa.</span></div>
+              <div><b>2</b><span>La ficha trae el lote del catastro provincial{city.cpua ? ' y el distrito del CPUA con sus indicadores' : city.nivel >= 2 ? ' y la zona con FOS, FOT y altura de la capa provincial' : ''}.</span></div>
+              <div><b>3</b><span>{city.cpua ? 'Revisá las notas del distrito (PRAC en el Área Centro, sectores especiales) antes de usar la cifra.' : city.nivel >= 2 ? 'Revisá los parámetros contra la ordenanza (' + city.ord + ') y completá retiros y plantas.' : 'Cargá FOS, FOT, altura y retiros del código urbano local para calcular la cabida.'}</span></div>
             </div>
           </div></div>}
           {!M && !busy && !local && <div className="card"><div className="empty">
