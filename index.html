@@ -979,6 +979,7 @@ function ciudadPorId(id, obj) {
   if (!id) return null;
   return CIUDADES.find(function (c) { return c.id === id; }) || (obj && obj.id === id && obj.c ? obj : null);
 }
+function ciudadDeLote(l) { const a = (l && l.analisis) || {}; return ciudadPorId(a.ciudad || 'cordoba', a.ciudadObj) || (a.ciudadObj && a.ciudadObj.nombre ? a.ciudadObj : CORDOBA); }
 function loadCity() { try { const o = JSON.parse(localStorage.getItem('ac.ciudad') || 'null'); return o ? (ciudadPorId(o.id, o) || null) : null; } catch (e) { return null; } }
 function storeCity(c) { try { if (c) localStorage.setItem('ac.ciudad', JSON.stringify(c)); else localStorage.removeItem('ac.ciudad'); } catch (e) { } }
 
@@ -2958,7 +2959,7 @@ function CarteraTab({ sess, cartera, cartErr, empresas, onLogin, onOpen, onReloa
       const data = filas.map(function (l) {
         const a = l.analisis || {}, res = a.resultado || {}, ind = l._ind;
         const o = {
-          'Nombre': l.nombre || '', 'Nomenclatura': l.nom_muni || '', 'Nomenclatura provincial': l.nomenclatura || '', 'Cuenta': l.cuenta || '',
+          'Nombre': l.nombre || '', 'Ciudad': ciudadDeLote(l).nombre, 'Nomenclatura': l.nom_muni || '', 'Nomenclatura provincial': l.nomenclatura || '', 'Cuenta': l.cuenta || '',
           'Zona': l.zona || '', 'Norma': l.norma || '', 'Superficie m²': l.superficie != null ? Number(l.superficie) : null,
           'Cabida m²': l.cabida_m2 != null ? Number(l.cabida_m2) : null, 'Plantas': res.floors != null ? (res.floors <= 1 ? 'PB' : 'PB+' + (res.floors - 1)) : '', 'Altura m': res.h != null ? Math.round(res.h * 100) / 100 : null,
           'Unidades': res.units || '', 'Estado': estadoInfo(l.estado)[1], 'Precio': l.precio != null ? Number(l.precio) : null, 'Moneda': l.moneda,
@@ -3125,8 +3126,7 @@ function App() {
     flash('Escenario "' + e.nombre + '" aplicado en la calculadora');
   };
   const abrirDeCartera = function (l) {
-    const a = l.analisis || {};
-    const c = ciudadPorId(a.ciudad || 'cordoba', a.ciudadObj) || CORDOBA;
+    const c = ciudadDeLote(l);
     if (!cityRef.current || c.id !== cityRef.current.id) setCity(c);
     setTab('lote'); pick(Number(l.lat), Number(l.lon));
   };
