@@ -4,6 +4,18 @@ Herramienta web para analizar lotes de Córdoba capital: normativa urbana, cabid
 
 **Sitio:** https://manuelsagarraga-cloud.github.io/Analisis-Cabida/
 
+## Ciudades y niveles
+
+Al entrar se elige la ciudad. El nivel dice cuánto del código urbano calcula la herramienta sola:
+
+| Nivel | Qué hace | Dónde |
+|---|---|---|
+| 3 · Código completo | Zona, retiros, alturas, centro de manzana y reglas de la 8256 automáticas | Córdoba capital |
+| 2 · Zona automática | Zona, FOS, FOT y altura de la capa provincial `normativas_urbanas_ocupacion_v` de IDECOR, editables; retiros a mano | 41 localidades (Río Cuarto, Villa María, Carlos Paz, Alta Gracia, etc.) |
+| 1 · Parámetros a mano | Catastro provincial con la geometría del lote; FOS, FOT, altura y retiros se cargan desde el código local | Cualquier localidad de la provincia (Huinca Renancó y las que se busquen) |
+
+Las localidades de nivel 2 están en `NIVEL2` dentro de `index.html`. Si IDECOR suma una localidad a la capa provincial, se agrega ahí con su centro y su ordenanza.
+
 ## Qué hace
 
 - **Lote:** buscás por dirección, nomenclatura (04-02-065-002), cuenta o coordenadas, o tocás el lote en el mapa. La ficha junta ocupación del suelo (Ord. 8256 / 8057 y modificatorias, convenios), uso (8133, 13131), fraccionamiento (8060), centro de manzana, patrimonio, loteos, valores de referencia y todas las ordenanzas que alcanzan al lote.
