@@ -180,6 +180,23 @@ h3.lbl{font-size:11px}
 table.t input.cell{width:100%;min-width:70px;border:1px solid transparent;background:transparent;font-family:var(--fm);font-size:12px;text-align:right;padding:3px 4px;color:var(--c0);border-radius:2px}
 table.t input.cell:hover,table.t input.cell:focus{border-color:var(--b0);background:var(--bg);outline:none}
 table.t.neg td{padding:2px 4px}
+.city-page{flex:1;overflow-y:auto;background:var(--bg);padding:28px 16px 40px}
+.city-in{max-width:980px;margin:0 auto}
+.city-in h1{font-size:24px;font-weight:300;letter-spacing:.5px;margin-bottom:4px}
+.city-grp{margin-top:22px}
+.city-grp h2{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:var(--c1);margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:8px}
+.city-btn{text-align:left;border:1px solid var(--b0);background:var(--el);border-radius:4px;padding:10px 12px;cursor:pointer;font-family:var(--ff);color:var(--c0);display:flex;flex-direction:column;gap:3px;min-width:0}
+.city-btn:hover{border-color:var(--ac);background:var(--acbg)}
+.city-btn b{font-size:13.5px}
+.city-btn span{font-size:11px;color:var(--c1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.city-btn.big{border-top:3px solid var(--ac);padding:14px}
+.niv{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;padding:2px 7px;border-radius:2px}
+.niv-3{background:var(--okbg);color:var(--ok)}.niv-2{background:var(--acbg);color:var(--ac)}.niv-1{background:var(--warnbg);color:#b77905}
+:root[data-theme="dark"] .niv-1{color:var(--warn)}
+.city-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--b0);background:var(--el);border-radius:3px;padding:3px 8px;font-family:var(--ff);font-size:12px;font-weight:700;color:var(--c0);cursor:pointer;white-space:nowrap}
+.city-chip:hover{border-color:var(--ac)}
+.np-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:8px}
 @media print{
   body{overflow:visible;height:auto;background:#fff;color:#000}
   #root{height:auto}
@@ -896,6 +913,75 @@ const BASES = {
 };
 function baseLayer(k) { const b = BASES[k]; return L.tileLayer(b[1], { maxZoom: 20, maxNativeZoom: b[3], attribution: b[2] }); }
 
+/* ═══════ Ciudades y niveles ═══════
+   Nivel 3: código urbano programado (solo Córdoba capital).
+   Nivel 2: zona, FOS, FOT y altura de la capa provincial "Normativas Urbanas: Ocupación del Suelo" de IDECOR (editables).
+   Nivel 1: catastro provincial y parámetros cargados a mano. Sirve para cualquier localidad de la provincia. */
+const NU_LAYER = 'normativas_urbanas_ocupacion_v';
+const NIVELES = {
+  3: ['Código completo', 'Zona, retiros, alturas, centro de manzana y reglas del código aplicadas automáticamente.'],
+  2: ['Zona automática', 'Zona, FOS, FOT y altura de la capa provincial de IDECOR. Los retiros y casos especiales se cargan a mano.'],
+  1: ['Parámetros a mano', 'Catastro provincial con la geometría del lote. FOS, FOT, altura y retiros los cargás vos desde el código urbano local.']
+};
+const CORDOBA = { id: 'cordoba', nombre: 'Córdoba', nivel: 3, c: [-31.4167, -64.1833], z: 13, ord: 'Ord. 8256 y modificatorias' };
+// [nombre, localidad en la capa NU, lat, lon, ordenanza]
+const NIVEL2 = [
+  ['Alta Gracia', 'Alta Gracia', -31.6573, -64.4174, 'Ord. 8457'],
+  ['Anisacate', 'Anisacate', -31.7313, -64.3964, 'Ord. 825/2015'],
+  ['Arroyito', 'Arroyito', -31.4213, -63.052, 'Ord. 1081/03'],
+  ['Bell Ville', 'Bell Ville', -32.6184, -62.6797, 'Ord. 1866/14'],
+  ['Colonia Caroya', 'Colonia Caroya', -31.056, -64.0941, 'Ord. 2361/20'],
+  ['Cosquín', 'Cosquín', -31.2196, -64.4591, 'Ord. 72'],
+  ['Elena', 'Elena', -32.5757, -64.3961, 'Ord. 656/24'],
+  ['Hernando', 'Hernando', -32.4304, -63.7012, 'Ord. 55/18'],
+  ['Jesús María', 'Jesús María', -30.9893, -64.0973, 'Ord. 4196'],
+  ['Justiniano Posse', 'Justiniano Posse', -32.8849, -62.6795, 'Ord. 27/23'],
+  ['La Calera', 'La Calera', -31.3441, -64.3601, 'Ord. 058/19'],
+  ['La Falda', 'La Falda', -31.0958, -64.4961, 'Ord. 3329'],
+  ['La Granja', 'La Granja', -30.9962, -64.2593, 'Ord. 516/18'],
+  ['Laguna Larga', 'Laguna Larga', -31.7801, -63.7807, 'Ord. 1573'],
+  ['Las Higueras', 'Las Higueras', -33.1029, -64.2967, 'Ord. 16/15'],
+  ['Las Varillas', 'Las varillas', -31.8647, -62.7155, 'Ord. 480/22'],
+  ['Mayu Sumaj', 'Mayu Sumaj', -31.4685, -64.5523, 'Res. 1499/18'],
+  ['Mina Clavero', 'Mina Clavero', -31.723, -65.006, 'Ord. 819/04'],
+  ['Monte Buey', 'Monte Buey', -32.9151, -62.4445, 'Ord. 24/24'],
+  ['Morteros', 'Morteros', -30.7107, -62.0082, 'Ord. 1529'],
+  ['Nono', 'Nono', -31.7975, -65.0029, 'Ord. 993/18'],
+  ['Oncativo', 'Oncativo', -31.915, -63.6694, 'Ord. 333/87 y 1993/11'],
+  ['Porteña', 'Porteña', -30.9791, -62.0345, 'Ord. 1462/08'],
+  ['Río Ceballos', 'Río Ceballos', -31.1718, -64.3206, 'Ord. 2651/19'],
+  ['Río Cuarto', 'Río Cuarto', -33.1234, -64.3493, 'Ord. 1082/11'],
+  ['Salsipuedes', 'Salsipuedes', -31.1332, -64.311, 'Ord. 942/08'],
+  ['San Antonio de Arredondo', 'San Antonio de Arredondo', -31.522, -64.5433, 'Res. 19/08'],
+  ['San Basilio', 'San Basilio', -33.4971, -64.3178, 'Ord. 060/2012'],
+  ['San Francisco', 'San Francisco', -31.4278, -62.0828, 'Ord. 7588'],
+  ['San Isidro - La Quintana', 'San Isidro - La Quintana', -31.8067, -64.4058, 'Res. 05/2025 y 14/2025'],
+  ['Santa Rosa de Calamuchita', 'Santa Rosa de Calamuchita', -32.0803, -64.5398, 'Cód. de edificación 261/1984'],
+  ['Unquillo', 'Unquillo', -31.2307, -64.3164, 'Ord. 34/86, 020/99 y 005/96'],
+  ['Vicuña Mackenna', 'Vicuña Mackena', -33.9174, -64.3916, 'Ord. 1067/2015'],
+  ['Villa Allende', 'Villa Allende', -31.2869, -64.2687, 'Ord. 37/19'],
+  ['Villa Carlos Paz', 'Villa Carlos Paz', -31.421, -64.5164, 'Ord. 4021'],
+  ['Villa de las Rosas', 'Villa de las Rosas', -31.9309, -65.0406, 'Cód. de edificación 1088/13'],
+  ['Villa General Belgrano', 'Villa General Belgrano', -31.9814, -64.5881, 'Ord. 1655/11'],
+  ['Villa Giardino', 'Villa Giardino', -31.0398, -64.4885, 'Ord. 430/99'],
+  ['Villa María', 'Villa María', -32.4095, -63.2391, 'Ord. 6402 y modificatorias'],
+  ['Villa Nueva', 'Villa Nueva', -32.4743, -63.2637, 'Ord. 3710'],
+  ['Villa Río Icho Cruz', 'Villa Río Icho Cruz', -31.4828, -64.5631, 'Ord. 214/23']
+].map(function (x) { return { id: 'nu:' + x[1], nombre: x[0], nu: x[1], nivel: 2, c: [x[2], x[3]], z: 15, ord: x[4] }; });
+// Localidades de nivel 1 que ya se usan (cualquier otra se agrega desde la pantalla de ciudades)
+const NIVEL1 = [
+  { id: 'loc:huinca-renanco', nombre: 'Huinca Renancó', nivel: 1, c: [-34.8413, -64.3747], z: 15, depto: 'General Roca' }
+];
+const CIUDADES = [CORDOBA].concat(NIVEL2, NIVEL1);
+const esLocal = function (c) { return !!c && c.id !== 'cordoba'; };
+const normTxt = function (s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); };
+function ciudadPorId(id, obj) {
+  if (!id) return null;
+  return CIUDADES.find(function (c) { return c.id === id; }) || (obj && obj.id === id && obj.c ? obj : null);
+}
+function loadCity() { try { const o = JSON.parse(localStorage.getItem('ac.ciudad') || 'null'); return o ? (ciudadPorId(o.id, o) || null) : null; } catch (e) { return null; } }
+function storeCity(c) { try { if (c) localStorage.setItem('ac.ciudad', JSON.stringify(c)); else localStorage.removeItem('ac.ciudad'); } catch (e) { } }
+
 async function wfs(layer, cql, opt) {
   opt = opt || {};
   const p = new URLSearchParams({ service: 'WFS', version: '2.0.0', request: 'GetFeature', outputFormat: 'application/json', srsName: 'EPSG:4326', typeNames: 'idecor:' + layer });
@@ -912,13 +998,25 @@ async function wfs(layer, cql, opt) {
   } finally { clearTimeout(t); }
 }
 
-async function consultar(lat, lon) {
+// Capas que solo existen para Córdoba capital: en las otras localidades quedan vacías para que la ficha no cambie de forma
+const CBA_KEYS = ['zona', 'cm', 'uso', 'fracc', 'o13131', 'franja', 'resguardo', 'apu', 'app', 'arq', 'loteoA', 'loteoU', 'cat', 'sitios', 'elem', 'gal', 'vial', 'v9089'];
+const NU_PROPS = 'localidad,ord,zona,denominacion,fos,fot,sup_min,frente_min,altura_max,retiros';
+
+async function consultar(lat, lon, city) {
   const pt = 'SRID=4326;POINT(' + lon + ' ' + lat + ')';
   const I = 'INTERSECTS(geom,' + pt + ')';
   const dw = function (m) { return 'DWITHIN(geom,' + pt + ',' + m + ',meters)'; };
   const d = 0.0012;
   const bb = 'BBOX(geom,' + (lon - d) + ',' + (lat - d) + ',' + (lon + d) + ',' + (lat + d) + ",'EPSG:4326')";
-  const jobs = {
+  const local = esLocal(city);
+  const jobs = local ? {
+    parcela: () => wfs('parcelas', I, { count: 1 }),
+    manzana: () => wfs('manzana', I, { count: 1 }),
+    nu: () => wfs(NU_LAYER, I, { props: NU_PROPS }),
+    vt: () => wfs('valor_tierra_urbana_2025', I, { props: 'nomenclatura,vut_pesos,superficie_terreno' }),
+    alq: () => wfs('alquileres_parcela_urbano_2026', I, { props: 'nomenclatura,estado,vua,vua_comercial' }),
+    vecinas: () => wfs('manzana', bb, { props: 'nomenclatura,geom' })
+  } : {
     parcela: () => wfs('parcelas', I, { count: 1 }),
     manzana: () => wfs('manzana', I, { count: 1 }),
     zona: () => wfs('CBA_Ordenanza_8256', I, { props: P8256 }),
@@ -944,7 +1042,9 @@ async function consultar(lat, lon) {
     vecinas: () => wfs('manzana', bb, { props: 'nomenclatura,geom' })
   };
   const keys = Object.keys(jobs);
-  const D = { lat: lat, lon: lon, errors: {}, t: Date.now() };
+  const D = { lat: lat, lon: lon, errors: {}, t: Date.now(), city: city || CORDOBA };
+  if (local) CBA_KEYS.forEach(function (k) { D[k] = []; });
+  else D.nu = [];
   const run = async function (ks) {
     const res = await Promise.allSettled(ks.map(function (k) { return jobs[k](); }));
     ks.forEach(function (k, i) {
@@ -1034,6 +1134,46 @@ function retiroSuquia(muni) {
   return null;
 }
 
+/* ═══════ Norma de localidades del interior (niveles 1 y 2) ═══════
+   La capa provincial trae los valores como texto ("0,6", "70", "Doce metros (12m.)"): solo se toma un número
+   cuando el texto empieza con uno; lo demás queda a la vista para cargarlo a mano. */
+function nuNum(v) { const s = S_(v); if (!s || !/^\d/.test(s)) return null; const n = E.num(s); return n != null && n > 0 ? n : null; }
+const fmtC = function (x) { return String(Math.round(x * 100) / 100).replace('.', ','); };
+function normaLocal(v, meta) {
+  meta = meta || {};
+  const N = E.parseNorma({
+    ord_y_perfil: 'LOC-' + (meta.zona || 'MANUAL'), perfil_o_zona: meta.zona || '', ord_original: meta.ord || '',
+    altura_maxima: v.hMax || null,
+    pisos_maximos: v.pisos ? 'Planta Baja + ' + Math.max(0, Math.round(v.pisos) - 1) : '',
+    retiro_frente: v.rf ? fmtC(v.rf) + ' m' : '',
+    otros_retiros: v.rfo ? 'Retiro de Fondo: ' + fmtC(v.rfo) + ' m' : ''
+  });
+  // FOS y FOT se asignan después de parsear: la heurística de "valores cruzados" de la 8256 no aplica acá
+  N.fos = v.fos != null ? v.fos / 100 : null;
+  N.fot = v.fot != null ? v.fot : null;
+  N.notes = [];
+  N.local = true; N.meta = meta;
+  N.etiqueta = meta.zona ? 'Zona ' + meta.zona : 'Parámetros a mano';
+  N.noCalc = false; N.noCalcReason = '';
+  if (N.fos == null && N.fot == null && N.hMax == null) { N.noCalc = true; N.noCalcReason = 'Cargá FOS, FOT o altura máxima para calcular la cabida.'; }
+  else if (N.fot == null && N.hMax == null) { N.noCalc = true; N.noCalcReason = 'Con el FOS solo no hay tope en altura: cargá el FOT o la altura máxima.'; }
+  return N;
+}
+function normaNU(p) {
+  let fos = nuNum(p.fos);
+  if (fos != null && fos <= 1) fos = fos * 100;
+  const v = { fos: fos, fot: nuNum(p.fot), hMax: nuNum(p.altura_max) };
+  const N = normaLocal(v, { zona: S_(p.zona), ord: S_(p.ord), nu: p });
+  if (N.noCalc) N.noCalcReason = 'La capa provincial no trae valores numéricos suficientes para esta zona: cargalos a mano.';
+  return N;
+}
+// Valores iniciales del editor de parámetros a partir de la norma de la capa
+function npDesde(N) {
+  const r = function (x) { return x == null ? '' : Math.round(x * 100) / 100; };
+  if (!N) return { fos: '', fot: '', hMax: '', pisos: '', rf: '', rfo: '' };
+  return { fos: N.fos != null ? r(N.fos * 100) : '', fot: r(N.fot), hMax: r(N.hMax), pisos: N.pisosMax || '', rf: N.fixedFront || '', rfo: N.back || '' };
+}
+
 /* ═══════ Modelo del lote ═══════ */
 function buildModel(D) {
   const M = { D: D };
@@ -1041,8 +1181,10 @@ function buildModel(D) {
   const mz = D.manzana[0] || null;
   M.parcel = parcel; M.pp = parcel ? parcel.properties : null; M.mz = mz;
   M.geo = parcel ? E.analyzeLot(parcel.geometry, mz && mz.geometry, D.vecinas.map(function (f) { return { nom: f.properties.nomenclatura, geom: f.geometry }; }), mz && mz.properties.nomenclatura) : null;
+  M.city = D.city || CORDOBA;
+  M.local = esLocal(M.city);
   // normas de ocupación (puede haber superposición: convenio + zona base)
-  const normas = D.zona.map(function (f) { return E.parseNorma(f.properties); });
+  const normas = M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
   normas.sort(function (a, b) {
     const sa = (a.convenio && !a.noCalc ? 0 : (!a.noCalc ? 1 : 2)), sb = (b.convenio && !b.noCalc ? 0 : (!b.noCalc ? 1 : 2));
     return sa - sb;
@@ -1085,7 +1227,7 @@ function buildModel(D) {
     det.cmOn = true; det.lfi = Math.round(fac * g.mzProf * 10) / 10; det.cmNote = fnote;
   } else det.cmOn = false;
   if (M.fracc) det.min8060S = E.num(M.fracc.superficie);
-  if (M.pp) det.suquia = retiroSuquia(nomMuni(M.pp.Nomenclatura));
+  if (M.pp && !M.local) det.suquia = retiroSuquia(nomMuni(M.pp.Nomenclatura));
   det.patron = D.uso[0] ? S_(D.uso[0].properties.patron) : '';
   M.det = det;
   return M;
@@ -1210,6 +1352,8 @@ function LoteCard({ M, lote }) {
       </div>
       <div style={{ marginTop: 12 }}>
         <KV items={[
+          ['Localidad', M.local ? (S_(pp.localidad) || M.city.nombre) + (S_(pp.departamento) ? ' · ' + S_(pp.departamento) : '') : null],
+          ['Designación', M.local && S_(pp.desig_oficial) ? S_(pp.desig_oficial) : null],
           ['Nomenclatura', muni + '  (prov. ' + pp.Nomenclatura + ')', true],
           ['Cuenta', String(pp.Nro_Cuenta || ''), true],
           ['Superficie catastral', nf(det.S, 2) + ' m²' + (det.Sgeo && Math.abs(det.Sgeo - det.S) / det.S > 0.05 ? '  (polígono: ' + nf(det.Sgeo) + ' m²)' : ''), true],
@@ -1234,17 +1378,34 @@ const DEF = { hp: '', minD: 4, leExtra: 0 };
 function CabidaCard({ M, normaSel, setNormaSel, preset }) {
   const det = M.det;
   const normas = M.normas.filter(function (n) { return !n.noCalc; });
-  const N = normaSel != null && M.normas[normaSel] ? M.normas[normaSel] : (normas[0] || M.normas[0] || null);
-  const init = function () { return { S: det.S || '', a: det.a ? Math.round(det.a * 100) / 100 : '', f: det.f ? Math.round(det.f * 100) / 100 : '', W: det.W || '', esq: !!det.esq, cmOn: !!det.cmOn, lfi: det.lfi || '', hp: '', minD: 4, leExtra: 0 }; };
+  const N0 = normaSel != null && M.normas[normaSel] ? M.normas[normaSel] : (normas[0] || M.normas[0] || null);
+  const init = function () { return { S: det.S || '', a: det.a ? Math.round(det.a * 100) / 100 : '', f: det.f ? Math.round(det.f * 100) / 100 : '', W: det.W || '', esq: !!det.esq, cmOn: !!det.cmOn, lfi: det.lfi || '', hp: '', minD: 4, leExtra: 0, np: M.local ? npDesde(N0) : null }; };
   const [v, setV] = useState(init);
   useEffect(function () { setV(init()); }, [M.D.t]);
+  // En el interior, cambiar de polígono recarga los parámetros de esa zona
+  useEffect(function () { if (M.local) setV(function (o) { return Object.assign({}, o, { np: npDesde(N0) }); }); }, [normaSel]);
   // Escenario o análisis guardado aplicado desde la cartera
   useEffect(function () { if (preset && preset.v) setV(Object.assign(init(), preset.v)); }, [preset && preset.t]);
   const set = function (k) { return function (e) { const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value; setV(function (o) { const n = Object.assign({}, o); n[k] = val; return n; }); }; };
+  const setNp = function (k) { return function (e) { const val = e.target.value; setV(function (o) { const np = Object.assign({}, o.np || {}); np[k] = val; return Object.assign({}, o, { np: np }); }); }; };
   const num = function (x) { const n = parseFloat(String(x).replace(',', '.')); return isFinite(n) ? n : NaN; };
+  const npKey = JSON.stringify(v.np || null);
+  const N = useMemo(function () {
+    if (!M.local) return N0;
+    const np = v.np || {};
+    const pos = function (x) { const n = num(x); return isFinite(n) && n > 0 ? n : null; };
+    const meta = N0 ? N0.meta : { zona: '', ord: '' };
+    const Nm = normaLocal({ fos: pos(np.fos), fot: pos(np.fot), hMax: pos(np.hMax), pisos: pos(np.pisos), rf: pos(np.rf), rfo: pos(np.rfo) }, meta);
+    if (N0) Nm.etiqueta = N0.etiqueta;
+    return Nm;
+  }, [N0, npKey, M.local]);
   const L = { S: num(v.S), a: num(v.a), f: num(v.f), W: num(v.W), esq: v.esq, cmOn: v.cmOn, lfi: num(v.lfi), min8060S: det.min8060S, a2: v.esq ? det.a2 : null, patron: det.patron };
-  const r = useMemo(function () { return N ? E.cabida(N, L, { hp: num(v.hp), minD: num(v.minD), leExtra: num(v.leExtra) }) : null; }, [N, v.S, v.a, v.f, v.W, v.esq, v.cmOn, v.lfi, v.hp, v.minD, v.leExtra, det.min8060S, det.a2, det.patron]);
-  M.cabida = r; M.cabidaL = L; M.cabidaN = N; M.cabidaV = v; M.normaSelIdx = normaSel;
+  const r = useMemo(function () {
+    if (!N) return null;
+    if (M.local && N.noCalc) return { error: N.noCalcReason };
+    return E.cabida(N, L, { hp: num(v.hp), minD: num(v.minD), leExtra: num(v.leExtra) });
+  }, [N, v.S, v.a, v.f, v.W, v.esq, v.cmOn, v.lfi, v.hp, v.minD, v.leExtra, det.min8060S, det.a2, det.patron]);
+  M.cabida = r; M.cabidaL = L; M.cabidaN = N; M.cabidaN0 = N0; M.cabidaV = v; M.normaSelIdx = normaSel;
   const isDet = function (k) { return det[k] != null && String(det[k] === true ? true : (Math.round(det[k] * 100) / 100)) === String(v[k]); };
   const fld = function (k, label, unit, step) {
     const d = det[k] != null && det[k] !== '' && det[k] !== false;
@@ -1256,21 +1417,22 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
   const used = r && r.rows ? r.rows.filter(function (x) { return x.area > 1e-6; }) : [];
   const limTxt = !r || r.error ? '' : r.limit === 'FOT' ? 'Limita el FOT' : r.limit === 'FOS' ? 'Limita el FOS' : r.limit === 'Retiros' ? 'Limitan los retiros' : 'Limita el perfil';
   return (
-    <Card title="Cabida máxima" src="Cálculo con parámetros de la capa oficial" hero>
+    <Card title="Cabida máxima" src={M.local ? (N0 ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
       {M.normas.length > 1 && <label className="fld" style={{ marginBottom: 10 }}>
         <span>Norma aplicada (el punto cae en {M.normas.length} polígonos)</span>
-        <span className="row"><select value={normaSel != null ? normaSel : M.normas.indexOf(N)} onChange={function (e) { setNormaSel(parseInt(e.target.value, 10)); }}>
+        <span className="row"><select value={normaSel != null ? normaSel : M.normas.indexOf(N0)} onChange={function (e) { setNormaSel(parseInt(e.target.value, 10)); }}>
           {M.normas.map(function (n, i) { return <option key={i} value={i}>{n.etiqueta + ' · ' + (n.ordModif || n.ordOriginal || n.clave) + (n.noCalc ? ' (sin parámetros)' : '')}</option>; })}
         </select></span>
       </label>}
       {!N && <div className="alert err">No hay norma de ocupación para este punto.</div>}
-      {r && r.error && <div className="alert err">{r.error}</div>}
+      {M.local && <ParamsLocal M={M} N0={N0} np={v.np || {}} setNp={setNp} onReset={function () { setV(function (o) { return Object.assign({}, o, { np: npDesde(N0) }); }); }} />}
+      {r && r.error && <div className={'alert' + (M.local ? '' : ' err')}>{r.error}</div>}
       {r && !r.error && <Fragment>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div className="lbl">Superficie construible estimada · {N.etiqueta}</div>
             <div className="big">{nf(r.total)}<small>m²</small></div>
-            <div className="sub">cubiertos sobre cota de predio · {N.ordModif || N.ordOriginal}</div>
+            <div className="sub">cubiertos sobre cota de predio · {N.ordModif || N.ordOriginal || 'parámetros cargados a mano'}</div>
           </div>
           <div className="tags"><span className="tag tag-ac">{limTxt}</span>{r.alt && <span className="tag tag-grey">Alternativa disponible</span>}</div>
         </div>
@@ -1292,8 +1454,8 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
       </div>
       <div className="no-print" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
         <label className="chk"><input type="checkbox" checked={v.esq} onChange={set('esq')} /> Esquina</label>
-        <label className="chk"><input type="checkbox" checked={v.cmOn} onChange={set('cmOn')} /> Centro de manzana</label>
-        {v.cmOn && <label className="fld" style={{ width: 150 }}><span>Línea de frente interno</span><span className="row"><input type="number" step="0.1" value={v.lfi} onChange={set('lfi')} /><span className="u">m</span></span></label>}
+        {!M.local && <label className="chk"><input type="checkbox" checked={v.cmOn} onChange={set('cmOn')} /> Centro de manzana</label>}
+        {v.cmOn && !M.local && <label className="fld" style={{ width: 150 }}><span>Línea de frente interno</span><span className="row"><input type="number" step="0.1" value={v.lfi} onChange={set('lfi')} /><span className="u">m</span></span></label>}
         <button className="btn" onClick={function () { setV(init()); }}>Restablecer detectados</button>
       </div>
       {det.frenteReal && det.a && Math.abs(det.frenteReal - det.a) / det.a > 0.1 && <p className="small muted" style={{ marginTop: 6 }}>Lote irregular: frente real {n2(det.frenteReal)} m; se usa un frente equivalente de {n2(det.a)} m para que frente × fondo dé la superficie.</p>}
@@ -1315,9 +1477,71 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
       {N && /CENTRO HIST/i.test(N.otras || '') && M.D.app.some(function (f) { return /CENTRO HIST/i.test(S_(f.properties.nombre_app)); }) && <div className="alert">Manzana del Centro Histórico: las alturas máximas las fija la Dirección de Planeamiento Urbano, así que esta cabida es indicativa hasta tener esa consulta.</div>}
       {det.suquia && <div className="alert">Manzana con retiro obligatorio de <b>{det.suquia} m</b> en los frentes al Río Suquía o a la Av. Costanera (Art. 9 bis, Ord. 12483). {num(v.leExtra) >= det.suquia ? 'Ya está aplicado en el cálculo.' : <button className="btn" style={{ marginLeft: 6 }} onClick={function () { setV(function (o) { return Object.assign({}, o, { leExtra: det.suquia }); }); }}>Aplicar {det.suquia} m</button>}</div>}
       {M.convenioSinParam && <div className="alert">Esta parcela está alcanzada por un convenio urbanístico ({M.convenioSinParam.ordModif}). La cabida real la fija ese convenio: el cálculo de arriba usa la zona base como referencia.</div>}
+      {M.local && <div className="alert">Nivel {M.city.nivel} · {M.city.nombre}: el cálculo usa solo FOS, FOT, altura, plantas y retiros de frente y fondo. No aplica retiros laterales, perfiles escalonados, premios ni excepciones del código local: verificalos con la ordenanza antes de comprometer un número.</div>}
       <p className="small muted" style={{ marginTop: 10 }}>Estimación preliminar. No descuenta patios reglamentarios, núcleos ni circulaciones; los subsuelos de cocheras no computan. No reemplaza la visación ni el certificado de uso del suelo.</p>
     </Card>
   );
+}
+
+/* ── Editor de parámetros para localidades del interior ── */
+function ParamsLocal({ M, N0, np, setNp, onReset }) {
+  const nu = N0 && N0.meta && N0.meta.nu;
+  const f = function (k, label, unit, step) {
+    return <label className="fld"><span>{label}</span><span className="row"><input type="number" inputMode="decimal" step={step || '0.01'} min="0" value={np[k] == null ? '' : np[k]} onChange={setNp(k)} /><span className="u">{unit}</span></span></label>;
+  };
+  // Textos de la capa que no se pudieron leer como número: quedan a la vista para cargarlos a mano
+  const txt = [];
+  if (nu) {
+    [['FOS', nu.fos], ['FOT', nu.fot], ['Altura máxima', nu.altura_max], ['Retiros', nu.retiros]].forEach(function (x) {
+      const s = S_(x[1]); if (s && (x[0] === 'Retiros' || !/^\d/.test(s))) txt.push([x[0], s]);
+    });
+  }
+  return <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--b1)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span className={'niv niv-' + M.city.nivel}>Nivel {M.city.nivel}</span>
+      <span className="small muted">{N0 ? 'Valores de la capa provincial (' + (N0.meta.ord || 'ordenanza local') + '). Corregilos si el código dice otra cosa.' : 'Este punto no tiene zona en la capa provincial: cargá los valores del código urbano de ' + M.city.nombre + '.'}</span>
+    </div>
+    <div className="np-grid">
+      {f('fos', 'FOS', '%', '1')}
+      {f('fot', 'FOT', '', '0.1')}
+      {f('hMax', 'Altura máxima', 'm', '0.5')}
+      {f('pisos', 'Plantas máx.', 'n°', '1')}
+      {f('rf', 'Retiro de frente', 'm', '0.5')}
+      {f('rfo', 'Retiro de fondo', 'm', '0.5')}
+    </div>
+    {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) { return <li key={i}><b>{x[0]} según la capa:</b> {x[1]}</li>; })}</ul>}
+    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>Volver a los valores de la capa</button>}
+  </div>;
+}
+
+/* ── Ficha de normativa para localidades del interior ── */
+function NormaLocalCard({ M }) {
+  const c = M.city, nv = NIVELES[c.nivel];
+  const fs = M.D.nu || [];
+  return <Card title="Normativa" src={c.nivel >= 2 ? 'IDECOR · Normativas Urbanas: Ocupación del Suelo' : 'Sin capa de zonificación'}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+      <span className={'niv niv-' + c.nivel}>Nivel {c.nivel} · {nv[0]}</span>
+      <b>{c.nombre}</b>{c.ord && <span className="small muted">· {c.ord}</span>}
+    </div>
+    <p className="small muted">{nv[1]}</p>
+    {fs.length === 0 && <div className="alert">{c.nivel >= 2 ? 'El punto no cae en ninguna zona de la capa provincial (puede ser vía pública, zona rural o un sector sin cargar).' : 'Esta localidad no publica su zonificación en IDECOR.'} Los parámetros de la cabida se cargan a mano desde el código urbano local.</div>}
+    {fs.map(function (f, i) {
+      const p = f.properties;
+      return <div key={i} style={{ marginTop: 10 }}>
+        <KV items={[
+          ['Zona', S_(p.zona) + (S_(p.denominacion) && S_(p.denominacion) !== S_(p.zona) ? ' · ' + S_(p.denominacion) : '')],
+          ['Norma', S_(p.ord)],
+          ['FOS', S_(p.fos) || null],
+          ['FOT', S_(p.fot) || null],
+          ['Altura máxima', S_(p.altura_max) || null],
+          ['Retiros', S_(p.retiros) || null],
+          ['Superficie mínima', S_(p.sup_min) ? S_(p.sup_min) + (/^\d/.test(S_(p.sup_min)) ? ' m²' : '') : null],
+          ['Frente mínimo', S_(p.frente_min) ? S_(p.frente_min) + (/^\d/.test(S_(p.frente_min)) ? ' m' : '') : null]
+        ]} />
+      </div>;
+    })}
+    <p className="small muted" style={{ marginTop: 10 }}>La capa provincial resume cada código en pocos campos. Usos permitidos, fraccionamiento, perfiles y excepciones están en la ordenanza de la localidad.</p>
+  </Card>;
 }
 
 function NormaCard({ M }) {
@@ -1522,7 +1746,8 @@ function classifyCat(M) {
 function resumen(M) {
   const pp = M.pp, r = M.cabida, N = M.cabidaN, L = M.cabidaL || {};
   const t = [];
-  t.push('NORMATIVA Y CABIDA — Córdoba');
+  const c = M.city || CORDOBA;
+  t.push('NORMATIVA Y CABIDA — ' + c.nombre + (M.local ? ' (nivel ' + c.nivel + ': ' + NIVELES[c.nivel][0].toLowerCase() + ')' : ''));
   t.push(pp ? 'Parcela ' + nomMuni(pp.Nomenclatura) + ' · cuenta ' + pp.Nro_Cuenta : 'Punto ' + M.D.lat.toFixed(6) + ', ' + M.D.lon.toFixed(6));
   if (pp) t.push('Superficie ' + nf(M.det.S, 2) + ' m² · frente ' + n2(L.a) + ' m · fondo ' + n2(L.f) + ' m · calle ' + nf(L.W, 1) + ' m' + (L.esq ? ' · esquina' : ''));
   if (N) t.push('Zona: ' + N.etiqueta + ' (' + (N.ordModif || N.ordOriginal) + ') · FOS ' + (N.fos != null ? nf(N.fos * 100) + '%' : '—') + ' · FOT ' + (N.fot != null ? nf(N.fot, 2) : '—') + ' · altura ' + (N.hMax ? n2(N.hMax) + ' m' : 'sin límite'));
@@ -1536,20 +1761,32 @@ function resumen(M) {
   if (D.app[0]) t.push('Patrimonio: ' + S_(D.app[0].properties.nombre_app));
   if (D.arq[0]) t.push('Área arqueológica: ' + S_(D.arq[0].properties.escalas));
   if (M.convenioSinParam) t.push('Convenio urbanístico: ' + M.convenioSinParam.ordModif);
-  t.push('Fuente: capas oficiales IDECOR / Municipalidad de Córdoba. Estimación preliminar, verificar con visación municipal.');
+  t.push(M.local ? 'Fuente: catastro provincial y capa Normativas Urbanas de IDECOR; parámetros revisados a mano. Estimación preliminar, verificar con el código urbano y la visación municipal.' : 'Fuente: capas oficiales IDECOR / Municipalidad de Córdoba. Estimación preliminar, verificar con visación municipal.');
   t.push(location.origin + location.pathname + '#' + M.D.lat.toFixed(6) + ',' + M.D.lon.toFixed(6));
   return t.join('\n');
 }
 
 /* ═══════ Mapa ═══════ */
-function MapView({ onPick, M, overlay, active, focus }) {
+function MapView({ onPick, M, overlay, active, focus, city }) {
+  city = city || CORDOBA;
   const el = useRef(null), mapRef = useRef(null), grp = useRef(null), ovl = useRef(null), pickRef = useRef(onPick);
   pickRef.current = onPick;
   useEffect(function () {
-    const map = L.map(el.current, { zoomControl: true }).setView([-31.4167, -64.1833], 13);
+    const map = L.map(el.current, { zoomControl: true }).setView(city.c, city.z || 13);
     const base = baseLayer('gris').addTo(map);
     const argen = baseLayer('argenmap'), osm = baseLayer('osm'), sat = baseLayer('sat');
-    const w = function (layer, extra) { return L.tileLayer.wms(WMS, Object.assign({ layers: 'idecor:' + layer, format: 'image/png', transparent: true, version: '1.1.1', attribution: 'IDECOR · Municipalidad de Córdoba' }, extra || {})); };
+    const w = function (layer, extra) { return L.tileLayer.wms(WMS, Object.assign({ layers: 'idecor:' + layer, format: 'image/png', transparent: true, version: '1.1.1', attribution: esLocal(city) ? 'IDECOR' : 'IDECOR · Municipalidad de Córdoba' }, extra || {})); };
+    if (esLocal(city)) {
+      // Interior: catastro provincial y, si la localidad está en la capa provincial, su zonificación
+      const ov = { 'Parcelas': w('parcelas', { minZoom: 16, opacity: 0.85 }).addTo(map) };
+      if (city.nivel >= 2) ov['Ocupación del suelo'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
+      L.control.layers({ 'Mapa gris (IGN)': base, 'Argenmap (IGN)': argen, 'Calles (OSM)': osm, 'Satélite': sat }, ov, { collapsed: true }).addTo(map);
+      L.control.scale({ imperial: false }).addTo(map);
+      grp.current = L.layerGroup().addTo(map);
+      map.on('click', function (e) { pickRef.current(e.latlng.lat, e.latlng.lng); });
+      mapRef.current = map;
+      return function () { map.remove(); };
+    }
     const zon = w('CBA_Ordenanza_8256', { opacity: 0.45 }).addTo(map);
     const par = w('parcelas', { minZoom: 17, opacity: 0.85 }).addTo(map);
     const cm = w('CBA_Centro_de_Manzana_8256', { opacity: 0.5 });
@@ -1596,7 +1833,9 @@ function MapView({ onPick, M, overlay, active, focus }) {
 }
 
 /* ═══════ Búsqueda ═══════ */
-async function buscar(q) {
+async function buscar(q, city) {
+  city = city || CORDOBA;
+  const local = esLocal(city);
   q = q.trim();
   let m;
   if ((m = q.match(/^(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)$/))) {
@@ -1605,7 +1844,8 @@ async function buscar(q) {
     return { go: { lat: a, lon: b } };
   }
   let prov = null;
-  if (/^\d{1,2}\s*-\s*\d{1,2}\s*-\s*\d{1,3}\s*-\s*\d{1,3}$/.test(q)) prov = nomProv(q.replace(/\s/g, ''));
+  // La nomenclatura corta (04-02-065-002) solo se puede completar en Córdoba capital; en el interior va la provincial de 16 dígitos
+  if (!local && /^\d{1,2}\s*-\s*\d{1,2}\s*-\s*\d{1,3}\s*-\s*\d{1,3}$/.test(q)) prov = nomProv(q.replace(/\s/g, ''));
   else if (/^\d{16}$/.test(q)) prov = q;
   if (prov) {
     const fs = await wfs('parcelas', "Nomenclatura='" + prov + "'", { count: 1 });
@@ -1620,14 +1860,18 @@ async function buscar(q) {
   // dirección: Georef (datos.gob.ar); si no encuentra, reintenta sin las primeras palabras del nombre
   // (Georef guarda algunos nombres recortados, p. ej. "OSPO TREJO Y SANABRIA") y, al final, OpenStreetMap
   const out = [];
-  async function georef(txt) {
+  const lejos = function (lat, lon) { return Math.hypot((lat - city.c[0]) * 111, (lon - city.c[1]) * 94) > 25; };
+  async function georef(txt, sinLoc) {
     try {
-      const u = 'https://apis.datos.gob.ar/georef/api/direcciones?direccion=' + encodeURIComponent(txt) + '&provincia=' + encodeURIComponent('Córdoba') + '&departamento=Capital&max=6';
+      const zona = local ? (sinLoc ? '' : '&localidad_censal=' + encodeURIComponent(city.nombre)) : '&departamento=Capital';
+      const u = 'https://apis.datos.gob.ar/georef/api/direcciones?direccion=' + encodeURIComponent(txt) + '&provincia=' + encodeURIComponent('Córdoba') + zona + '&max=6';
       const j = await (await fetch(u)).json();
-      (j.direcciones || []).forEach(function (d) { if (d.ubicacion && d.ubicacion.lat != null) out.push({ label: d.nomenclatura, lat: d.ubicacion.lat, lon: d.ubicacion.lon, addr: true }); });
+      (j.direcciones || []).forEach(function (d) { if (d.ubicacion && d.ubicacion.lat != null && !(local && lejos(d.ubicacion.lat, d.ubicacion.lon))) out.push({ label: d.nomenclatura, lat: d.ubicacion.lat, lon: d.ubicacion.lon, addr: true }); });
     } catch (e) { }
   }
   await georef(q);
+  // Georef nombra algunas localidades distinto: sin filtro de localidad, quedándose con lo que cae cerca
+  if (!out.length && local) await georef(q, true);
   const mNum = q.match(/^(.*?)[\s,]+(\d{1,5})\s*$/);
   if (!out.length && mNum) {
     const words = mNum[1].replace(/^(av(enida)?|bv|bulevar|calle|pje|pasaje)\.?\s+/i, '').split(/\s+/).filter(Boolean);
@@ -1635,7 +1879,8 @@ async function buscar(q) {
   }
   if (!out.length) {
     try {
-      const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=ar&viewbox=-64.36,-31.28,-64.04,-31.56&bounded=1&q=' + encodeURIComponent(q);
+      const vb = local ? [city.c[1] - 0.15, city.c[0] + 0.12, city.c[1] + 0.15, city.c[0] - 0.12].map(function (x) { return x.toFixed(4); }).join(',') : '-64.36,-31.28,-64.04,-31.56';
+      const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=ar&viewbox=' + vb + '&bounded=1&q=' + encodeURIComponent(q);
       const j = await (await fetch(u)).json();
       j.forEach(function (d) {
         const house = d.type === 'house' || d.addresstype === 'building' || d.category === 'building';
@@ -1643,7 +1888,7 @@ async function buscar(q) {
       });
     } catch (e) { }
   }
-  if (!out.length) return { error: 'No encontré "' + q + '". Probá con calle y altura (ej. "Obispo Trejo 300"), nomenclatura (04-02-065-002) o cuenta.' };
+  if (!out.length) return { error: local ? 'No encontré "' + q + '" en ' + city.nombre + '. Probá con calle y altura, la nomenclatura provincial de 16 dígitos, la cuenta o tocá el lote en el mapa.' : 'No encontré "' + q + '". Probá con calle y altura (ej. "Obispo Trejo 300"), nomenclatura (04-02-065-002) o cuenta.' };
   if (out.length === 1) return { go: out[0] };
   return { list: out };
 }
@@ -1923,12 +2168,17 @@ async function tipoCambioMEP() {
 }
 
 /* Foto del análisis que queda guardada con el lote */
+function packNorma(N) { return N ? { clave: N.clave, etiqueta: N.etiqueta, ordOriginal: N.ordOriginal, ordModif: N.ordModif, fos: N.fos, fot: N.fot, hLM: N.hLM, hMax: N.hMax, plano45: N.plano45, hPerim: N.hPerim, unidades: N.unidadesTxt } : null; }
 function snapshot(M) {
   const N = M.cabidaN, r = M.cabida, D = M.D;
   const vt = D.vt[0] && D.vt[0].properties, alq = D.alq[0] && D.alq[0].properties;
   return {
     v: 1, fecha: new Date().toISOString(),
-    norma: N ? { clave: N.clave, etiqueta: N.etiqueta, ordOriginal: N.ordOriginal, ordModif: N.ordModif, fos: N.fos, fot: N.fot, hLM: N.hLM, hMax: N.hMax, plano45: N.plano45, hPerim: N.hPerim, unidades: N.unidadesTxt } : null,
+    ciudad: M.city ? M.city.id : 'cordoba',
+    ciudadObj: M.city && M.city.nivel === 1 ? { id: M.city.id, nombre: M.city.nombre, nivel: 1, c: M.city.c, z: M.city.z, depto: M.city.depto || '' } : null,
+    norma: packNorma(N),
+    // En el interior la norma usada puede estar editada a mano: para avisar cambios se compara la de la capa
+    normaCapa: M.local ? packNorma(M.cabidaN0) : null,
     normaSel: M.normaSelIdx != null ? M.normaSelIdx : null,
     inputs: M.cabidaV ? Object.assign({}, M.cabidaV) : null,
     resultado: r && !r.error ? { total: Math.round(r.total), floors: r.floors, h: r.hReached, index: r.index, limit: r.limit, units: r.units ? r.units.label : null } : null,
@@ -2062,10 +2312,11 @@ function LoginScreen({ onDone }) {
     <div className="login-brand">
       <div className="login-logo">AC</div>
       <h1>Análisis de Cabida</h1>
-      <p className="login-sub">Córdoba capital</p>
+      <p className="login-sub">Córdoba capital y el interior</p>
       <ul>
         <li>La normativa oficial de cada lote al instante: ocupación, uso y fraccionamiento del suelo, patrimonio, loteos y ordenanzas.</li>
         <li>Cabida máxima en m² con la geometría real del lote y las reglas vigentes de la Ord. 8256.</li>
+        <li>Interior provincial: catastro de cualquier localidad y zonificación de 41 ciudades más desde la capa provincial de IDECOR.</li>
         <li>Cartera de lotes de tu empresa con precio, incidencia, notas y escenarios.</li>
       </ul>
       <p className="small">Datos de IDECOR y la Municipalidad de Córdoba, consultados en vivo.</p>
@@ -2082,6 +2333,84 @@ function LoginScreen({ onDone }) {
       </form>
     </div>
   </div>;
+}
+
+/* ── Elección de ciudad: antes de entrar a la herramienta ── */
+function CityScreen({ onPick, onCancel, extra, actual }) {
+  const [f, setF] = useState('');
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const t = normTxt(f);
+  const l2 = NIVEL2.filter(function (c) { return !t || normTxt(c.nombre).indexOf(t) >= 0; });
+  const l1 = NIVEL1.concat((extra || []).filter(function (c) { return !CIUDADES.some(function (x) { return x.id === c.id; }); }))
+    .filter(function (c, i, arr) { return arr.findIndex(function (x) { return x.id === c.id; }) === i; })
+    .filter(function (c) { return !t || normTxt(c.nombre).indexOf(t) >= 0; });
+  const buscarLoc = async function (e) {
+    e.preventDefault();
+    if (!q.trim()) return;
+    setBusy(true); setErr(''); setRes(null);
+    try {
+      const u = 'https://apis.datos.gob.ar/georef/api/localidades?nombre=' + encodeURIComponent(q.trim()) + '&provincia=' + encodeURIComponent('Córdoba') + '&max=12&campos=id,nombre,centroide,departamento.nombre';
+      const j = await (await fetch(u)).json();
+      const ls = (j.localidades || []).map(function (l) {
+        const k = normTxt(l.nombre);
+        // Si la localidad ya tiene zonificación (nivel 2) o es la capital, se usa esa configuración
+        const ya = k === 'cordoba' ? CORDOBA : NIVEL2.find(function (c) { return normTxt(c.nombre) === k; });
+        return ya || { id: 'loc:' + l.id, nombre: l.nombre, nivel: 1, c: [l.centroide.lat, l.centroide.lon], z: 15, depto: l.departamento ? l.departamento.nombre : '' };
+      });
+      setRes(ls);
+      if (!ls.length) setErr('No encontré "' + q.trim() + '" entre las localidades de la provincia.');
+    } catch (x) { setErr('No pude consultar el listado de localidades: ' + (x.message || x)); }
+    setBusy(false);
+  };
+  const Btn = function ({ c, big }) {
+    return <button className={'city-btn' + (big ? ' big' : '')} onClick={function () { onPick(c); }}>
+      <b>{c.nombre}</b>
+      <span>{c.ord || (c.depto ? 'Depto. ' + c.depto : 'Catastro provincial')}</span>
+    </button>;
+  };
+  return <div className="city-page"><div className="city-in">
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div>
+        <h1>¿En qué ciudad está el lote?</h1>
+        <p className="small muted">Cada ciudad tiene su propio código urbano. El nivel indica cuánto de ese código calcula la herramienta sola.</p>
+      </div>
+      {onCancel && <button className="btn" onClick={onCancel}>Volver a {actual ? actual.nombre : 'la ciudad anterior'}</button>}
+    </div>
+
+    <div className="city-grp">
+      <h2><span className="niv niv-3">Nivel 3 · {NIVELES[3][0]}</span></h2>
+      <p className="small muted">{NIVELES[3][1]}</p>
+      <div className="city-grid"><Btn c={CORDOBA} big /></div>
+    </div>
+
+    <div className="city-grp">
+      <h2><span className="niv niv-2">Nivel 2 · {NIVELES[2][0]}</span><span>{NIVEL2.length} localidades</span></h2>
+      <p className="small muted">{NIVELES[2][1]}</p>
+      <label className="fld" style={{ maxWidth: 320, marginTop: 8 }}><span className="row"><input value={f} onChange={function (e) { setF(e.target.value); }} placeholder="Filtrar por nombre" aria-label="Filtrar localidades" /></span></label>
+      <div className="city-grid">{l2.map(function (c) { return <Btn key={c.id} c={c} />; })}</div>
+      {l2.length === 0 && <p className="small muted" style={{ marginTop: 8 }}>Ninguna localidad de nivel 2 coincide con "{f}".</p>}
+    </div>
+
+    <div className="city-grp">
+      <h2><span className="niv niv-1">Nivel 1 · {NIVELES[1][0]}</span></h2>
+      <p className="small muted">{NIVELES[1][1]}</p>
+      {l1.length > 0 && <div className="city-grid">{l1.map(function (c) { return <Btn key={c.id} c={c} />; })}</div>}
+      <form onSubmit={buscarLoc} style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', maxWidth: 520 }}>
+        <input className="sin" style={{ flex: 1, minWidth: 200 }} value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="Otra localidad de la provincia (ej. Laboulaye)" aria-label="Buscar otra localidad" />
+        <button className="btn pri" type="submit" disabled={busy}>{busy ? 'Buscando…' : 'Buscar'}</button>
+      </form>
+      {err && <div className="alert" style={{ maxWidth: 520 }}>{err}</div>}
+      {res && res.length > 0 && <div className="city-grid">{res.map(function (c) {
+        return <button key={c.id} className="city-btn" onClick={function () { onPick(c); }}>
+          <b>{c.nombre}</b>
+          <span><span className={'niv niv-' + c.nivel} style={{ padding: '0 5px' }}>N{c.nivel}</span> {c.depto ? 'Depto. ' + c.depto : c.ord || ''}</span>
+        </button>;
+      })}</div>}
+    </div>
+  </div></div>;
 }
 
 /* ── Menú de usuario: empresa, selector de empresa para el admin y cerrar sesión ── */
@@ -2377,7 +2706,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   const agregar = async function () {
     setBusy('add'); setErr('');
     try {
-      const b = Object.assign(cuerpoAnalisis(), { nombre: M.pp ? 'Parcela ' + nomMuni(M.pp.Nomenclatura) : 'Lote ' + M.D.lat.toFixed(5) + ', ' + M.D.lon.toFixed(5), estado: 'en_analisis' });
+      const b = Object.assign(cuerpoAnalisis(), { nombre: (M.pp ? 'Parcela ' + nomMuni(M.pp.Nomenclatura) : 'Lote ' + M.D.lat.toFixed(5) + ', ' + M.D.lon.toFixed(5)) + (M.local ? ' · ' + M.city.nombre : ''), estado: 'en_analisis' });
       if (empresaDestino) b.empresa = empresaDestino;
       const rows = await sbReq('lotes', { method: 'POST', body: b, prefer: 'return=representation' });
       const lt = rows && rows[0];
@@ -2451,7 +2780,7 @@ function CarteraCard({ M, sess, lote, onLogin, onChange, onApply, cartErr, q, ma
   </Card>;
 
   const snap = lote.analisis;
-  const cambios = cambiosNorma(snap, N);
+  const cambios = M.local ? (snap && snap.normaCapa ? cambiosNorma({ norma: snap.normaCapa }, M.cabidaN0) : []) : cambiosNorma(snap, N);
   const ind = f ? indicadores(camposDesdeForm(f), cabida, S, vut, tc) : null;
   const esc = lote.escenarios || [];
   const escIndic = function (e) { const pu = precioUSD(lote); return pu != null && e.resultado && e.resultado.total ? pu / e.resultado.total : null; };
@@ -2744,6 +3073,19 @@ function App() {
   const [empresas, setEmpresas] = useState({});
   const [preset, setPreset] = useState(null);
   const aplicado = useRef(null);
+  const [city, setCityS] = useState(loadCity);
+  const [elegir, setElegir] = useState(false);
+  const cityRef = useRef(city);
+  cityRef.current = city;
+  const local = esLocal(city);
+  const setCity = function (c) {
+    cityRef.current = c; setCityS(c); storeCity(c); setElegir(false); setTab(function (t) { return t === 'ord' && esLocal(c) ? 'lote' : t; });
+    reqId.current++; setM(null); setErr(null); setOpts(null); setOverlay(null); setBusy(false); setNormaSel(null); setQ('');
+    try { history.replaceState(null, '', location.pathname); } catch (e) { }
+  };
+  const ciudadesCartera = useMemo(function () {
+    return (cartera || []).map(function (l) { return l.analisis && l.analisis.ciudadObj; }).filter(Boolean);
+  }, [cartera]);
   useEffect(function () { sbToken().then(function (t) { if (t) setSess(sbWho(t)); setAuthOk(true); }); }, []);
   const loadCartera = useCallback(async function () {
     try { const rows = await sbReq('lotes?select=*&order=updated_at.desc'); setCartera(rows || []); setCartErr(null); }
@@ -2782,7 +3124,12 @@ function App() {
     setPreset({ v: e.inputs, t: Date.now() });
     flash('Escenario "' + e.nombre + '" aplicado en la calculadora');
   };
-  const abrirDeCartera = function (l) { setTab('lote'); pick(Number(l.lat), Number(l.lon)); };
+  const abrirDeCartera = function (l) {
+    const a = l.analisis || {};
+    const c = ciudadPorId(a.ciudad || 'cordoba', a.ciudadObj) || CORDOBA;
+    if (!cityRef.current || c.id !== cityRef.current.id) setCity(c);
+    setTab('lote'); pick(Number(l.lat), Number(l.lon));
+  };
   const subirLocales = async function () {
     let ok = 0, dup = 0;
     for (const x of saved) {
@@ -2802,7 +3149,7 @@ function App() {
     const id = ++reqId.current;
     setBusy(true); setErr(null); setOpts(null); setTab('lote');
     try {
-      const D = await consultar(lat, lon);
+      const D = await consultar(lat, lon, cityRef.current);
       if (id !== reqId.current) return;
       const model = buildModel(D);
       classifyCat(model);
@@ -2819,7 +3166,7 @@ function App() {
 
   useEffect(function () {
     const m = location.hash.match(/^#(-?\d+\.\d+),(-?\d+\.\d+)$/);
-    if (m) pick(parseFloat(m[1]), parseFloat(m[2]));
+    if (m && cityRef.current) pick(parseFloat(m[1]), parseFloat(m[2]));
   }, []);
 
   const goTo = async function (o) {
@@ -2832,7 +3179,7 @@ function App() {
     if (!q.trim()) return;
     setBusy(true); setErr(null); setOpts(null);
     try {
-      const r = await buscar(q);
+      const r = await buscar(q, cityRef.current);
       if (r.error) { setErr(r.error); setBusy(false); }
       else if (r.list) { setOpts(r.list); setBusy(false); }
       else goTo(r.go);
@@ -2857,6 +3204,7 @@ function App() {
 
   if (!authOk) return <div className="ld" style={{ margin: 'auto' }}><div className="sp" /><span>Cargando…</span></div>;
   if (!sess) return <LoginScreen onDone={function (w) { setSess(w); }} />;
+  if (!city || elegir) return <CityScreen onPick={setCity} onCancel={city ? function () { setElegir(false); } : null} actual={city} extra={ciudadesCartera} />;
 
   return <DigCtx.Provider value={dg}>
     <div className="hdr">
@@ -2865,10 +3213,11 @@ function App() {
         Análisis de Cabida
       </a>
       <span className="hdr-sep" style={{ color: 'var(--b0)' }}>|</span>
-      <span className="hdr-title">Normativa y Cabida · Córdoba</span>
+      <span className="hdr-title">Normativa y Cabida</span>
+      <button className="city-chip" onClick={function () { setElegir(true); }} title="Cambiar de ciudad"><span className={'niv niv-' + city.nivel} style={{ padding: '0 5px' }}>N{city.nivel}</span>{city.nombre}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg></button>
       <div className="seg" style={{ marginLeft: 8 }}>
         <button className={tab === 'lote' ? 'on' : ''} onClick={function () { setTab('lote'); }}>Lote</button>
-        <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>
+        {!local && <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>}
         <button className={tab === 'cartera' ? 'on' : ''} onClick={function () { setTab('cartera'); }}>Cartera{carteraVis && carteraVis.length ? ' · ' + carteraVis.length : ''}</button>
       </div>
       <div className="acts">
@@ -2879,18 +3228,28 @@ function App() {
 
     <div style={{ display: tab === 'lote' ? 'contents' : 'none' }}>
       <form className="sbar" onSubmit={doSearch}>
-        <input className="sin" value={q} onChange={function (e) { setQ(e.target.value); }} placeholder="Dirección (Obispo Trejo 300), nomenclatura (04-02-065-002), cuenta o coordenadas" aria-label="Buscar lote" />
+        <input className="sin" value={q} onChange={function (e) { setQ(e.target.value); }} placeholder={local ? 'Dirección en ' + city.nombre + ', nomenclatura provincial (16 dígitos), cuenta o coordenadas' : 'Dirección (Obispo Trejo 300), nomenclatura (04-02-065-002), cuenta o coordenadas'} aria-label="Buscar lote" />
         <button className="btn pri" type="submit" disabled={busy}>{busy ? 'Consultando…' : 'Buscar'}</button>
         {overlay && <span className="tag tag-ac" style={{ cursor: 'pointer' }} onClick={function () { setOverlay(null); }} title="Quitar resaltado">{overlay.label} en el mapa ✕</span>}
         <span className="shint">o tocá el lote en el mapa</span>
         {opts && <div className="sres">{opts.map(function (o, i) { return <button key={i} type="button" onClick={function () { setOpts(null); goTo(o); }}>{o.label}</button>; })}</div>}
       </form>
       <div className="main">
-        <MapView onPick={pick} M={M} overlay={overlay} active={tab === 'lote'} focus={focus} />
+        <MapView key={city.id} city={city} onPick={pick} M={M} overlay={overlay} active={tab === 'lote'} focus={focus} />
         <div className="panel">
           {err && <div className="alert" style={{ marginTop: 0, marginBottom: 10 }}>{err}</div>}
-          {busy && <div className="ld"><div className="sp" /><span>Consultando 23 capas de IDECOR para este punto…</span></div>}
-          {!M && !busy && <div className="card"><div className="empty">
+          {busy && <div className="ld"><div className="sp" /><span>{local ? 'Consultando catastro y normativa de IDECOR…' : 'Consultando 23 capas de IDECOR para este punto…'}</span></div>}
+          {!M && !busy && local && <div className="card"><div className="empty">
+            <h2>{city.nombre}</h2>
+            <p><span className={'niv niv-' + city.nivel}>Nivel {city.nivel} · {NIVELES[city.nivel][0]}</span></p>
+            <p style={{ marginTop: 8 }}>{NIVELES[city.nivel][1]}</p>
+            <div className="steps">
+              <div><b>1</b><span>Buscá la dirección, la nomenclatura provincial o la cuenta, o tocá el lote en el mapa.</span></div>
+              <div><b>2</b><span>La ficha trae el lote del catastro provincial{city.nivel >= 2 ? ' y la zona con FOS, FOT y altura de la capa provincial' : ''}.</span></div>
+              <div><b>3</b><span>{city.nivel >= 2 ? 'Revisá los parámetros contra la ordenanza (' + city.ord + ') y completá retiros y plantas.' : 'Cargá FOS, FOT, altura y retiros del código urbano local para calcular la cabida.'}</span></div>
+            </div>
+          </div></div>}
+          {!M && !busy && !local && <div className="card"><div className="empty">
             <h2>Normativa y cabida por lote</h2>
             <p>Datos oficiales de la Municipalidad de Córdoba publicados en IDECOR, consultados en vivo.</p>
             <div className="steps">
@@ -2901,25 +3260,27 @@ function App() {
             <p className="small muted" style={{ marginTop: 14 }}>Probá con <a href="#-31.413500,-64.188800" onClick={function (e) { e.preventDefault(); pick(-31.4135, -64.1888); }}>un lote en Nueva Córdoba</a>.</p>
           </div></div>}
           {M && !busy && <Fragment>
-            <div className="print-only" style={{ marginBottom: 10 }}><b>Análisis de Cabida · Córdoba</b> · {new Date().toLocaleDateString('es-AR')}</div>
+            <div className="print-only" style={{ marginBottom: 10 }}><b>Análisis de Cabida · {M.city.nombre}</b> · {new Date().toLocaleDateString('es-AR')}</div>
             <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
               <button className="btn pri" onClick={copy}>Copiar resumen</button>
               <button className="btn" onClick={function () { window.print(); }}>Imprimir / PDF</button>
-              <a className="btn" href={MAPA311} target="_blank" rel="noopener">Ver en MapasCórdoba ↗</a>
+              {!M.local && <a className="btn" href={MAPA311} target="_blank" rel="noopener">Ver en MapasCórdoba ↗</a>}
               {toast && <span className="small" style={{ color: 'var(--ok)', fontWeight: 700 }}>{toast}</span>}
             </div>
-            <AvisosNorma M={M} />
+            {!M.local && <AvisosNorma M={M} />}
             <LoteCard M={M} lote={loteActual} />
             <CabidaCard M={M} normaSel={normaSel} setNormaSel={setNormaSel} preset={preset} />
             <div className="no-print"><CarteraCard M={M} sess={sess} lote={loteActual} cartErr={cartErr} q={q} empresaDestino={empresaDestino} empresas={empresas} onLogin={salir} onChange={loadCartera} onApply={aplicarEscenario} marcarAplicado={function () { aplicado.current = M.D.t; }} /></div>
-            <NormaCard M={M} />
-            <UsoCard M={M} />
-            <FraccCard M={M} />
-            <CMCard M={M} />
-            <PatrimonioCard M={M} />
-            <EntornoCard M={M} />
-            <OrdLoteCard M={M} />
-            <p className="small muted">Fuente: capas WFS de IDECOR (Infraestructura de Datos Espaciales de la Provincia de Córdoba) con información de la Dirección de Planeamiento Urbano municipal y Catastro provincial, consultadas el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo.</p>
+            {M.local ? <NormaLocalCard M={M} /> : <Fragment>
+              <NormaCard M={M} />
+              <UsoCard M={M} />
+              <FraccCard M={M} />
+              <CMCard M={M} />
+              <PatrimonioCard M={M} />
+              <EntornoCard M={M} />
+              <OrdLoteCard M={M} />
+            </Fragment>}
+            {M.local ? <p className="small muted">Fuente: catastro provincial y capa "Normativas Urbanas: Ocupación del Suelo" de IDECOR, consultados el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo de {M.city.nombre}.</p> : <p className="small muted">Fuente: capas WFS de IDECOR (Infraestructura de Datos Espaciales de la Provincia de Córdoba) con información de la Dirección de Planeamiento Urbano municipal y Catastro provincial, consultadas el {new Date(M.D.t).toLocaleString('es-AR')}. Herramienta de consulta: no reemplaza la visación ni el certificado de uso del suelo.</p>}
           </Fragment>}
         </div>
       </div>
