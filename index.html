@@ -1343,18 +1343,39 @@ function normasMuni(D) {
   const pick = function (p, re) { const k = Object.keys(p).find(function (x) { return re.test(x); }); return k ? p[k] : null; };
   const out = [];
   (D.muni || []).forEach(function (x) {
-    if (!x.capa.z) return;
+    // Capas de zonificación y corredores con parámetros (Bell Ville publica los corredores como líneas)
+    if (!x.capa.z && !/corredor(es)?_(bv)$/i.test(x.capa.l)) return;
     x.fs.forEach(function (f) {
       const p = f.properties || {};
       let fos = nuNum(pick(p, /^(fos|fosmax|fos_|oye_fos_%|fos_coef)$/i)); if (fos != null && fos <= 1) fos = fos * 100;
       const fot = nuNum(pick(p, /^(fot|fotmax|oye_fot|fot_coef)$/i));
       const h = nuNum(pick(p, /^(altura_max|alt_max|altmax|h_max|hmax|oye_alt_max_m|altura_max_m)$/i));
       const zona = S_(pick(p, /^(zona|desig|design|designacion|patron|layer)$/i)) || S_(pick(p, /^(name|nombre)$/i));
-      const N = normaLocal({ fos: fos, fot: fot, hMax: h }, { zona: zona, ord: x.capa.t });
+      const pisos = nuNum(pick(p, /^(num_pisos|pisos|n_pisos|pisos_max)$/i));
+      // Retiro como código con texto (Bell Ville: "A (Obligatorio 3 m de L.M)"): se toma el primer "Obligatorio N m"
+      const retTxt = S_(pick(p, /^(retiro|retiros|retiro_frente)$/i));
+      const mr = retTxt.match(/obligatori[oa]\s*(\d+(?:[.,]\d+)?)\s*m/i);
+      const rf = mr ? E.num(mr[1]) : null;
+      // Datos del plano que no entran en la cabida: quedan a la vista
+      const txt = [];
+      const val = function (re) { const v = S_(pick(p, re)); return v && v !== '0' && v !== '-' ? v : ''; };
+      if (retTxt) txt.push(['Retiro', retTxt]);
+      if (val(/^perfil$/i)) txt.push(['Perfil', val(/^perfil$/i)]);
+      const cm = [val(/^cm_tipo$/i), val(/^cm_alt$/i) && 'altura ' + val(/^cm_alt$/i) + ' m', val(/^cm_ocupaci/i) && 'ocupación ' + val(/^cm_ocupaci/i) + (/^\d+([.,]\d+)?$/.test(val(/^cm_ocupaci/i)) ? '%' : '')].filter(Boolean);
+      if (cm.length) txt.push(['Centro de manzana', cm.join(' · ')]);
+      const lm = [val(/^p_frente_m$/i) && 'frente ' + val(/^p_frente_m$/i) + ' m', val(/^p_frente_e$/i) && 'frente en esquina ' + val(/^p_frente_e$/i) + ' m', val(/^p_sup$/i) && val(/^p_sup$/i) + ' m²'].filter(Boolean);
+      if (lm.length) txt.push(['Lote mínimo', lm.join(' · ')]);
+      if (val(/^p_pasillo$/i)) txt.push(['Pasillo', val(/^p_pasillo$/i)]);
+      const corredor = x.capa.g === 'lin';
+      const N = normaLocal({ fos: fos, fot: fot, hMax: h, pisos: pisos, rf: rf }, { zona: zona, ord: x.capa.t, muTxt: txt, corredor: corredor });
+      if (corredor) N.etiqueta = 'Corredor ' + (zona || '');
+      N.etiqueta += ' · plano municipal';
       if (N.noCalc) N.noCalcReason = 'El plano municipal no trae FOS, FOT o altura como número para esta zona: cargalos desde la ordenanza.';
       out.push(N);
     });
   });
+  // El corredor es más específico que la zona que atraviesa
+  out.sort(function (a, b) { return (b.meta.corredor ? 1 : 0) - (a.meta.corredor ? 1 : 0); });
   return out;
 }
 
@@ -1376,7 +1397,11 @@ function buildModel(D) {
   M.local = esLocal(M.city);
   // normas de ocupación (puede haber superposición: convenio + zona base)
   let normas = M.city.cpua ? D.cpua.map(function (f) { return normaCPUA(f.properties); }) : M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
-  if (M.local && !M.city.cpua && !normas.length) normas = normasMuni(D);
+  // El plano municipal, cuando trae números, va primero: suele estar más al día que la capa provincial
+  if (M.local && !M.city.cpua) {
+    const mu = normasMuni(D), muOk = mu.filter(function (n) { return !n.noCalc; });
+    normas = muOk.length ? muOk.concat(normas) : (normas.length ? normas : mu);
+  }
   normas.sort(function (a, b) {
     const sa = (a.convenio && !a.noCalc ? 0 : (!a.noCalc ? 1 : 2)), sb = (b.convenio && !b.noCalc ? 0 : (!b.noCalc ? 1 : 2));
     return sa - sb;
@@ -1694,6 +1719,7 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
       const s = S_(x[1]); if (s && (x[0] === 'Retiros' || !/^\d/.test(s))) txt.push([x[0], s]);
     });
   }
+  (meta.muTxt || []).forEach(function (x) { txt.push(x); });
   return <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--b1)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span className={'niv niv-' + M.city.nivel}>Nivel {M.city.nivel}</span>
@@ -1711,9 +1737,9 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
     {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) {
       // Algunas localidades cargan un enlace en lugar del valor (Unquillo: ficha por zona)
       const m = String(x[1]).match(/href=["']([^"']+)["'][^>]*>([^<]*)/i);
-      return <li key={i}><b>{x[0]} según la capa:</b> {m ? <a href={m[1]} target="_blank" rel="noopener">{S_(m[2]) || 'ver ficha'} ↗</a> : x[1]}</li>;
+      return <li key={i}><b>{x[0]} según {nu ? 'la capa' : 'el plano'}:</b> {m ? <a href={m[1]} target="_blank" rel="noopener">{S_(m[2]) || 'ver ficha'} ↗</a> : x[1]}</li>;
     })}</ul>}
-    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : 'Volver a los valores de la capa'}</button>}
+    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : nu ? 'Volver a los valores de la capa' : 'Volver a los valores del plano'}</button>}
   </div>;
 }
 
