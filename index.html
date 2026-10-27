@@ -1121,6 +1121,21 @@ async function consultar(lat, lon, city) {
   const failed = Object.keys(D.errors);
   if (failed.length) await run(failed);
   if (salta) normSalta(D, city);
+  // Respaldo: si la capa provincial no trae el lote, se usa el catastro municipal publicado en IDECOR
+  if (local && !salta && !D.parcela.length && mc && mc.parcelas) {
+    const P = mc.parcelas;
+    try {
+      const fs = await wfs(P.l, I, { count: 1 });
+      if (fs.length) { D.parcela = fs.map(function (f) { return normParcelaMuni(f, P, city); }); D.parcelaMuni = true; }
+    } catch (e) { D.errors.parcelaMunicipal = String(e.message || e); }
+    if (P.mz && !D.manzana.length) {
+      try {
+        const nm = function (f) { const p = f.properties; p.nomenclatura = S_(p.nomenclatura) || [p.c, p.s, p.m].filter(function (x) { return x != null; }).join('-') || String(f.id || ''); return f; };
+        D.manzana = (await wfs(P.mz, I, { count: 1 })).map(nm);
+        D.vecinas = (await wfs(P.mz, bb, { count: 80 })).map(nm);
+      } catch (e) { }
+    }
+  }
   D.muni = mc ? mc.capas.map(function (c, i) { return { capa: c, fs: D['mu' + i] || [], err: D.errors['mu' + i] }; }) : [];
   return D;
 }
@@ -1144,6 +1159,22 @@ function normSalta(D, city) {
 function fuenteTxt(city) {
   if (provDe(city) === 'salta') return 'catastro provincial de IDESA' + (city && city.cpua ? ' y distritos del CPUA 2025 de la Municipalidad de Salta (IDEMSa)' : '');
   return 'catastro provincial y capa "Normativas Urbanas: Ocupación del Suelo" de IDECOR';
+}
+// Lleva una parcela de un catastro municipal a los campos que usa la ficha
+function normParcelaMuni(f, P, city) {
+  const p = f.properties || {};
+  const nom = P.nom ? S_(p[P.nom]) : '';
+  const nm = P.nomMuni ? S_(p[P.nomMuni]) : '';
+  const sup = P.sup ? E.num(p[P.sup]) : null;
+  const ver = (P.ver || []).map(function (x) { return [x[0], S_(p[x[1]])]; }).filter(function (x) { return x[1] && x[1] !== '-' && x[1] !== '0'; });
+  f.properties = Object.assign({}, p, {
+    Nomenclatura: /^\d{16}$/.test(nom) ? nom : '', Nro_Cuenta: P.cuenta ? S_(p[P.cuenta]) : '',
+    Superficie_Tierra_Urbana: sup && sup > 0 ? sup : null, Estado: '', localidad: city.nombre,
+    desig_oficial: nm && !/^\d{16}$/.test(nm) ? nm : '',
+    _nom: /^\d{16}$/.test(nom) ? 'Parcela ' + nomMuni(nom) : (nm ? 'Parcela ' + nm : 'Parcela'),
+    _fuente: 'Catastro municipal de ' + city.nombre + ' (IDECOR)', _ver: ver
+  });
+  return f;
 }
 // Nombre corto de la parcela para títulos y listados
 function nomCorta(pp) { return pp ? (pp._nom || 'Parcela ' + nomMuni(pp.Nomenclatura)) : ''; }
@@ -1499,7 +1530,7 @@ function LoteCard({ M, lote }) {
   const vutM = vt && E.num(vt.vut_pesos);
   const ext = !!pp._fuente; // parcela de otra provincia: sin valuación ni datos de mejoras
   return (
-    <Card title="Lote" src={ext ? 'Parcelario · ' + fuenteCat(M.city).attr : 'Parcelario y valuación · IDECOR'} hero>
+    <Card title="Lote" src={ext ? 'Parcelario · ' + (M.D.parcelaMuni ? 'catastro municipal' : fuenteCat(M.city).attr) : 'Parcelario y valuación · IDECOR'} hero>
       <div className="title-lote">{ext ? pp._nom : muni ? 'Parcela ' + muni : 'Parcela'}</div>
       <div className="sub">{(det.esq ? 'Esquina' : g && g.pasante ? 'Frente a dos calles' : g && g.interior ? 'Lote interno' : 'Entre medianeras') + ' · ' + nf(det.S) + ' m²' + (S_(pp.Estado) ? ' · ' + S_(pp.Estado).toLowerCase() : '')}</div>
       <div className="tags" style={{ marginTop: 8 }}>
@@ -1514,10 +1545,11 @@ function LoteCard({ M, lote }) {
       <div style={{ marginTop: 12 }}>
         <KV items={[
           ['Localidad', M.local ? (S_(pp.localidad) || M.city.nombre) + (S_(pp.departamento) ? ' · ' + S_(pp.departamento) : '') : null],
+          ...((pp._ver || []).map(function (x) { return [x[0], x[1]]; })),
           ['Designación', M.local && S_(pp.desig_oficial) ? S_(pp.desig_oficial) : null],
-          ['Nomenclatura', ext ? S_(pp.Nomenclatura) : muni + '  (prov. ' + pp.Nomenclatura + ')', true],
-          [ext ? 'Matrícula catastral' : 'Cuenta', String(pp.Nro_Cuenta || ''), true],
-          [ext ? 'Superficie (polígono)' : 'Superficie catastral', nf(det.S, 2) + ' m²' + (det.Sgeo && Math.abs(det.Sgeo - det.S) / det.S > 0.05 ? '  (polígono: ' + nf(det.Sgeo) + ' m²)' : ''), true],
+          ['Nomenclatura', M.D.parcelaMuni ? (pp.Nomenclatura ? muni + '  (prov. ' + pp.Nomenclatura + ')' : S_(pp.desig_oficial) || null) : ext ? S_(pp.Nomenclatura) : muni + '  (prov. ' + pp.Nomenclatura + ')', true],
+          [ext && !M.D.parcelaMuni ? 'Matrícula catastral' : 'Cuenta', String(pp.Nro_Cuenta || ''), true],
+          [ext && !pp.Superficie_Tierra_Urbana ? 'Superficie (polígono)' : 'Superficie catastral', nf(det.S, 2) + ' m²' + (det.Sgeo && Math.abs(det.Sgeo - det.S) / det.S > 0.05 ? '  (polígono: ' + nf(det.Sgeo) + ' m²)' : ''), true],
           ['Frente', g && g.frentes.length ? g.frentes.map(function (x) { return n2(x.L) + ' m'; }).join(' + ') + (g.ochava ? ' + ochava' : '') : (g && g.frenteEst ? '≈ ' + n2(g.frenteEst) + ' m (estimado)' : null), true],
           ['Fondo', g && g.fondoMax ? n2(g.fondoMax) + ' m máx. · ' + n2(g.fondoMedio) + ' m medio' : null, true],
           ['Ancho de calle', g && g.frentes.length ? g.frentes.map(function (x) { return x.ancho ? '≈ ' + nf(x.ancho, 1) + ' m' : 'sin dato'; }).join(' · ') : null, true],
@@ -1530,7 +1562,8 @@ function LoteCard({ M, lote }) {
         ]} />
       </div>
       {g && g.notes.length > 0 && <div className="alert">{g.notes.join(' ')}</div>}
-      {ext ? <p className="small muted" style={{ marginTop: 8 }}>La superficie sale del polígono del catastro provincial de Salta (IDESA); la de la mensura puede diferir. Sin datos de valuación ni de mejoras en la capa pública.</p>
+      {M.D.parcelaMuni ? <div className="alert info">Este lote sale del catastro municipal de {M.city.nombre} publicado en IDECOR, porque la capa provincial de parcelas hoy no lo trae. No incluye valuación fiscal{pp.Superficie_Tierra_Urbana ? '' : ' y la superficie es la del polígono'}: verificala con la cédula catastral.</div>
+        : ext ? <p className="small muted" style={{ marginTop: 8 }}>La superficie sale del polígono del catastro provincial de Salta (IDESA); la de la mensura puede diferir. Sin datos de valuación ni de mejoras en la capa pública.</p>
         : <p className="small muted" style={{ marginTop: 8 }}>Valor de la tierra 2025 y alquiler enero 2026: estimaciones de IDECOR a partir del Observatorio del Mercado Inmobiliario. La valuación fiscal es la vigente en Catastro provincial.</p>}
     </Card>
   );
@@ -2094,6 +2127,8 @@ function MapView({ onPick, M, overlay, active, focus, city }) {
         ov['Parcelas'] = ws(F.wms, F.par, { minZoom: 16, opacity: 0.85, attribution: 'IDESA · Provincia de Salta' }).addTo(map);
       } else {
         ov = { 'Parcelas': w('parcelas', { minZoom: 16, opacity: 0.85 }).addTo(map) };
+        const mcp = muniCiudad(city);
+        if (mcp && mcp.parcelas) ov['Parcelas municipales'] = L.tileLayer.wms(WMS, { layers: mcp.parcelas.l, format: 'image/png', transparent: true, version: '1.1.1', minZoom: 16, opacity: 0.7, attribution: 'IDECOR Ciudades' }).addTo(map);
         if (city.nu) ov['Ocupación del suelo (provincial)'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
       }
       // Planos de la municipalidad: el primero de zonificación se prende si la ciudad no está en la capa provincial
@@ -2193,8 +2228,10 @@ async function buscar(q, city) {
   else if (/^\d{16}$/.test(q)) prov = q;
   const enCba = provDe(city) === 'cordoba';
   if (prov) {
-    const fs = await wfs('parcelas', "Nomenclatura='" + prov + "'", { count: 1 });
-    if (!fs.length) return { error: 'No encontré la parcela ' + q + ' en el parcelario provincial.' };
+    let fs = await wfs('parcelas', "Nomenclatura='" + prov + "'", { count: 1 });
+    const mcp = local ? muniCiudad(city) : null;
+    if (!fs.length && mcp && mcp.parcelas && mcp.parcelas.nom) fs = await wfs(mcp.parcelas.l, mcp.parcelas.nom + "='" + prov + "'", { count: 1 }).catch(function () { return []; });
+    if (!fs.length) return { error: 'No encontré la parcela ' + q + ' en el parcelario provincial' + (mcp && mcp.parcelas ? ' ni en el municipal' : '') + '.' };
     const p = interiorPoint(fs[0].geometry); return { go: { lat: p[1], lon: p[0] } };
   }
   if (enCba && /^\d{10,13}$/.test(q)) {
@@ -2243,7 +2280,10 @@ async function snapParcela(lat, lon, city) {
   try {
     const F = fuenteCat(city);
     const ext = provDe(city) !== 'cordoba';
-    const fs = await wfs(F.par, 'DWITHIN(geom,SRID=4326;POINT(' + lon + ' ' + lat + '),35,meters)', { base: F.base, props: ext ? null : 'Nomenclatura,geom', count: 30, timeout: 12000 });
+    const dwq = 'DWITHIN(geom,SRID=4326;POINT(' + lon + ' ' + lat + '),35,meters)';
+    let fs = await wfs(F.par, dwq, { base: F.base, props: ext ? null : 'Nomenclatura,geom', count: 30, timeout: 12000 });
+    const mcp = esLocal(city) ? muniCiudad(city) : null;
+    if (!fs.length && mcp && mcp.parcelas) fs = await wfs(mcp.parcelas.l, dwq, { count: 30, timeout: 12000 }).catch(function () { return []; });
     if (!fs.length) return null;
     const P = E.makeProj(lon, lat);
     let best = null, bd = Infinity;

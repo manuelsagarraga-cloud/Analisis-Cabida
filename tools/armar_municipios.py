@@ -8,7 +8,7 @@ import json, os, sys, datetime
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
-from municipios_curado import CURADO, SALTA_CAPAS, OBS, DOCS_EXTRA  # noqa: E402
+from municipios_curado import CURADO, SALTA_CAPAS, OBS, DOCS_EXTRA, PARCELAS  # noqa: E402
 
 rel = json.load(open(os.path.join(AQUI, 'idecor_relevamiento.json'), encoding='utf-8'))
 
@@ -55,6 +55,8 @@ for nombre in sorted(nombres):
     if cu.get('pagina'):
         mapas.append({'t': 'Página oficial de normativa', 'u': cu['pagina']})
     c = {'nombre': nombre, 'prov': prov, 'capas': capas, 'docs': docs, 'ordenanzas': ords, 'mapas': mapas}
+    if nombre in PARCELAS:
+        c['parcelas'] = PARCELAS[nombre]
     if cu.get('alias'):
         c['alias'] = cu['alias']
     if cu.get('aviso'):

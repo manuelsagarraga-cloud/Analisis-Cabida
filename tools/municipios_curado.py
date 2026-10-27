@@ -133,6 +133,24 @@ DOCS_EXTRA = {
         'ord_846_14reserva.pdf': 'm588/ord_846_14reserva.pdf', '1359_anexo_i_19reserva.pdf': 'm588/1359_anexo_i_19reserva.pdf'},
 }
 
+# Catastros municipales publicados en IDECOR: se usan cuando la capa provincial de parcelas no trae el lote.
+# nom = campo con la nomenclatura provincial de 16 dígitos (si la hay), sup = superficie, ver = campos extra para la ficha.
+PARCELAS = {
+    'Río Cuarto': {'l': 'idecor:riocuarto_parcelas', 'mz': 'idecor:riocuarto_mz', 'nom': 'nc2',
+                   'ver': [['Zona del plan urbano', 'zpu1'], ['Zona del plan urbano', 'zpu2'], ['Zona del plan urbano', 'zpu3'], ['Vecinal', 'vecinal'], ['Unidades en PH', 'phcant'], ['Zona de valuación', 'zvp']]},
+    'Bell Ville': {'l': 'idecor:parcelas_bv', 'nomMuni': 'nom_cat_m', 'sup': 'superficie', 'ver': [['Zona', 'zona'], ['Tipo', 'tipo']]},
+    'Villa Carlos Paz': {'l': 'idecor:Carlos_Paz_Parcelas', 'nomMuni': 'nomencla', 'ver': [['Barrio', 'barrios'], ['Construido', 'construido']]},
+    'Colonia Caroya': {'l': 'idecor:ccaroya_parcelas', 'nom': 'nomencprov', 'sup': 'supterreno', 'cuenta': 'cuenta', 'ver': [['Nomenclatura municipal', 'nomencmuni'], ['Estado', 'estado'], ['Barrio', 'dsbarrio'], ['Zona de servicios', 'zonasegunservicios'], ['Superficie edificada', 'mts2edif']]},
+    'Jesús María': {'l': 'idecor:Jesus_Maria_Parcelas', 'nomMuni': 'nomencmuni', 'sup': 'supterreno', 'ver': [['Ubicación', 'ubicacion'], ['Barrio', 'dsbarrio']]},
+    'Mina Clavero': {'l': 'idecor:mc_parcelas', 'nomMuni': 'nomenclatura', 'ver': [['Zona Ord. 819', 'zona_ord_819'], ['Zona Ord. 1104', 'zona_ord_1104'], ['Dirección', 'primera_direccion_sugerida']]},
+    'Morteros': {'l': 'idecor:mteros_parcelas', 'nom': 'nomenclatura', 'sup': 'superficie_tierra_urbana', 'cuenta': 'nro_cuenta', 'ver': [['Designación', 'desig_oficial'], ['Estado', 'estado']]},
+    'Río Ceballos': {'l': 'idecor:rc_parcelas', 'nom': 'nomencla1', 'ver': [['Dirección', 'calle'], ['Número', 'nro'], ['Barrio', 'barrio'], ['Ubicación', 'esq_med'], ['Estado', 'bal_edif']]},
+    'Salsipuedes': {'l': 'idecor:parcelario_salsipuedes', 'nom': 'nomen_provincial', 'sup': 'superficie', 'ver': [['Designación', 'desig_oficial'], ['Estado', 'estado']]},
+    'Villa Allende': {'l': 'idecor:va_parcelas', 'nom': 'nomenclatura_pcia', 'ver': [['Nomenclatura municipal', 'nomenclatura'], ['Destino', 'destino'], ['Estado catastral', 'estado_catastral']]},
+    'Villa Giardino': {'l': 'idecor:Villa_Giardino_Parcelas', 'nom': 'nomenclatura', 'sup': 'superficie', 'ver': [['Designación', 'designacion_oficial'], ['Estado', 'estado'], ['Dirección', 'calle'], ['Número', 'nro_puerta'], ['Zona de uso del suelo', 'zona_uso_de_suelo']]},
+    'Cosquín': {'l': 'idecor:parcelas_cosquin', 'nom': 'parcelas', 'ver': [['Barrio', 'barrio'], ['Zona tarifaria', 'zona_tarifaria']]},
+}
+
 # Capas municipales de Salta capital (IDEMSa) además de la zonificación del CPUA, que ya usa la cabida
 SALTA_CAPAS = [
     {'l': 'public:codigo_prac', 't': 'Protección patrimonial PRAC por parcela', 'g': 'pol'},
