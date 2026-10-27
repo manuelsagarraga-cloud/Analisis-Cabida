@@ -123,11 +123,19 @@ CURADO = {
         'aviso': 'Los tomos publicados por Orán son el resultado de una consultoría con una propuesta de ordenanza: verificar si el nuevo código ya fue sancionado.'},
 }
 
+# Documentos en subcarpetas del repositorio de IDECOR que el relevamiento por carpeta no encuentra
+# (rutas verificadas una por una; la capa provincial de Unquillo enlaza la carpeta norma_edif)
+DOCS_EXTRA = {
+    'Unquillo': {f: 'm585/02mapa_norma_edificacion/norma_edif/' + f for f in [
+        'ord_34_86_codedif.pdf', 'codedif_modif.pdf', 'ord_20_99.pdf', 'ord_5_96.pdf', 'ord_4_21.pdf', 'p_general.pdf',
+        'p_sanmartin.pdf', 'p_reservahidrica.pdf', 'p_fincadelsol.pdf', 'p_zr7_sanfrancisco.pdf', 'p_lascorzuelas.pdf',
+        'p_transicionreserva.pdf', 'p_zr8.pdf', 'p_corraldebarrancas.pdf']} | {
+        'ord_846_14reserva.pdf': 'm588/ord_846_14reserva.pdf', '1359_anexo_i_19reserva.pdf': 'm588/1359_anexo_i_19reserva.pdf'},
+}
+
 # Capas municipales de Salta capital (IDEMSa) además de la zonificación del CPUA, que ya usa la cabida
 SALTA_CAPAS = [
     {'l': 'public:codigo_prac', 't': 'Protección patrimonial PRAC por parcela', 'g': 'pol'},
     {'l': 'public:PIU', 't': 'Proyectos de Intervención Urbana (PIU)', 'g': 'pol'},
-    {'l': 'public:puc', 't': 'Perímetro Urbano Consolidado', 'g': 'pol'},
     {'l': 'public:clasificacion_usos', 't': 'Clasificación del suelo', 'g': 'pol'},
-    {'l': 'public:cota_1225', 't': 'Cota 1225', 'g': 'lin'},
 ]

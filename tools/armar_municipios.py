@@ -8,7 +8,7 @@ import json, os, sys, datetime
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
-from municipios_curado import CURADO, SALTA_CAPAS, OBS  # noqa: E402
+from municipios_curado import CURADO, SALTA_CAPAS, OBS, DOCS_EXTRA  # noqa: E402
 
 rel = json.load(open(os.path.join(AQUI, 'idecor_relevamiento.json'), encoding='utf-8'))
 
@@ -30,6 +30,8 @@ for nombre in sorted(nombres):
     for carpeta, files in r['d'].items():
         for f in files:
             docs.setdefault(f, carpeta + '/' + f)
+    for f, ruta in DOCS_EXTRA.get(nombre, {}).items():
+        docs.setdefault(f, ruta)
     capas = [{'l': 'idecor:' + l, 't': t, 'g': g, 'z': bool(z)} for l, t, g, z in r['c']]
     prov = cu.get('prov', 'cordoba')
     if nombre == 'Salta capital':
@@ -47,6 +49,7 @@ for nombre in sorted(nombres):
         ords.append(o)
     mapas = list(cu.get('mapas', []))
     nums = sorted({int(p.split('/')[0][1:]) for p in docs.values()} | set(MAPAS.get(nombre, [])))
+    nums = [n for n in nums if n]
     for n in nums:
         mapas.append({'t': 'Mapas Córdoba · mapa ' + str(n), 'u': 'https://mapascordoba.gob.ar/viewer/mapa/' + str(n)})
     if cu.get('pagina'):

@@ -1579,7 +1579,7 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
   const used = r && r.rows ? r.rows.filter(function (x) { return x.area > 1e-6; }) : [];
   const limTxt = !r || r.error ? '' : r.limit === 'FOT' ? 'Limita el FOT' : r.limit === 'FOS' ? 'Limita el FOS' : r.limit === 'Retiros' ? 'Limitan los retiros' : 'Limita el perfil';
   return (
-    <Card title="Cabida máxima" src={M.local ? (N0 && N0.meta && N0.meta.cpua ? 'Indicadores de la ficha del CPUA, editables' : N0 && !N0.noCalc ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
+    <Card title="Cabida máxima" src={M.local ? (N0 && N0.meta && N0.meta.cpua ? 'Indicadores de la ficha del CPUA, editables' : N0 && !N0.noCalc && !N0.meta.nu ? 'Parámetros del plano municipal, editables' : N0 && !N0.noCalc ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
       {M.normas.length > 1 && <label className="fld" style={{ marginBottom: 10 }}>
         <span>Norma aplicada (el punto cae en {M.normas.length} polígonos)</span>
         <span className="row"><select value={normaSel != null ? normaSel : M.normas.indexOf(N0)} onChange={function (e) { setNormaSel(parseInt(e.target.value, 10)); }}>
@@ -1674,7 +1674,11 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
       {f('rfo', 'Retiro de fondo', 'm', '0.5', meta.fondoH ? '1/3 H · mín. 4' : '')}
     </div>
     {meta.fondoH && !np.rfo && <p className="small muted" style={{ marginTop: 6 }}>Retiro de fondo: 1/3 de la altura, mínimo 4 m, sin retiro en esquina (CPUA, nota 8). Se recalcula con la altura; escribí un valor para fijarlo.</p>}
-    {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) { return <li key={i}><b>{x[0]} según la capa:</b> {x[1]}</li>; })}</ul>}
+    {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) {
+      // Algunas localidades cargan un enlace en lugar del valor (Unquillo: ficha por zona)
+      const m = String(x[1]).match(/href=["']([^"']+)["'][^>]*>([^<]*)/i);
+      return <li key={i}><b>{x[0]} según la capa:</b> {m ? <a href={m[1]} target="_blank" rel="noopener">{S_(m[2]) || 'ver ficha'} ↗</a> : x[1]}</li>;
+    })}</ul>}
     {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : 'Volver a los valores de la capa'}</button>}
   </div>;
 }
@@ -1732,9 +1736,10 @@ const MU_LBL = {
   obs: 'Observaciones', obsrv: 'Observaciones', observ: 'Observaciones', observaciones: 'Observaciones', observacio: 'Observaciones', nota: 'Nota', excepciones: 'Excepciones', cond_extra: 'Condiciones', otras_condic: 'Otras condiciones', espec: 'Especificaciones', dispespecial: 'Disposiciones especiales', restricc: 'Restricciones', restriccion: 'Restricción', contenido: 'Contenido',
   ord: 'Ordenanza', ordenanza: 'Ordenanza', ordenanza_area: 'Ordenanza', n_ord_subarea: 'Ordenanza', nro_ord: 'Ordenanza', normativa: 'Normativa', modificatoria: 'Modificatoria', modificada: 'Modificada por', art: 'Artículo', art_modificado: 'Artículo modificado',
   delimitacion: 'Delimitación', delimit: 'Delimitación', del: 'Delimitación', ubic: 'Ubicación', ubicacion: 'Ubicación', limites: 'Límites', barrio: 'Barrio', area: 'Área', sub_area: 'Subárea', subarea2: 'Subárea', nombre_area: 'Área', nombre_subarea: 'Subárea', sigla: 'Sigla', abrev: 'Sigla', corredor: 'Corredor', corr: 'Corredor', eje: 'Eje', tipo: 'Tipo', jerarquia: 'Jerarquía', suelo: 'Suelo', fraccionam: 'Fraccionamiento', fracc: 'Fraccionamiento', fraccion_m: 'Fraccionamiento', subdiv_suelo: 'Subdivisión', ocup_suelo: 'Ocupación',
-  DISTRITO: 'Distrito', PRAC: 'Protección PRAC'
+  cm_tipo: 'Centro de manzana (tipo)', cm_alt: 'Centro de manzana (altura)', cm_ocupaci: 'Centro de manzana (ocupación %)', cm_ocup: 'Centro de manzana (ocupación %)', p_pasillo: 'Lote con pasillo', uso_ind: 'Uso industrial', graficos: 'Gráfico', fos_coef: 'FOS según pendiente', fot_coef: 'FOT según pendiente', fcv_coef: 'FCV según pendiente', materializ: 'Materialización', material_1: 'Materialización', uf_turis: 'UF turísticas', sup_ufe: 'Superficie por UF', nomenclatu: 'Nomenclatura',
+  DISTRITO: 'Distrito', PRAC: 'Protección PRAC', ficha: 'Ficha', domicilio: 'Domicilio', inmueble: 'Inmueble', numero: 'Número', catastro: 'Catastro', TIPO: 'Tipo', NOMBE: 'Nombre', MIUP: 'N°', Clasific: 'Clasificación', clas: 'Clasificación'
 };
-const MU_SKIP = /^(id|fid|gid|tid|xid|ogc_fid|object_?id|objectid|global_?id|globalid|shape_|area2?$|AREA2?$|text$|layer$|estilo|orden$|num_area|num_subarea|num_zona|abrev_2|zona_graf|geom)/i;
+const MU_SKIP = /^(area km2|area m2|area ha|area_m2|area_ha|id|fid|gid|tid|xid|ogc_fid|object_?id|objectid|global_?id|globalid|shape_|area2?$|AREA2?$|text$|layer$|estilo|orden$|num_area|num_subarea|num_zona|abrev_2|zona_graf|geom)/i;
 function muLabel(k) { return MU_LBL[k] || MU_LBL[k.toLowerCase()] || (k.charAt(0).toUpperCase() + k.slice(1)).replace(/_/g, ' '); }
 function PlanosMuniCard({ M }) {
   const mc = muniCiudad(M.city);
