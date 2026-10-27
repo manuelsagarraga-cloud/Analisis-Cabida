@@ -1099,7 +1099,6 @@ async function consultar(lat, lon, city) {
     v9089: () => wfs('CBA_Red_Vial_9089', dw(520), { props: 'detalle' }),
     vecinas: () => wfs('manzana', bb, { props: 'nomenclatura,geom' })
   };
-  const keys = Object.keys(jobs);
   const D = { lat: lat, lon: lon, errors: {}, t: Date.now(), city: city || CORDOBA };
   // Capas municipales de la ciudad (polígonos por intersección; ejes y corredores lineales a 15 m)
   const mc = local ? muniCiudad(city) : null;
@@ -1117,7 +1116,7 @@ async function consultar(lat, lon, city) {
       else { D[k] = []; D.errors[k] = String(res[i].reason && res[i].reason.message || res[i].reason); }
     });
   };
-  await run(keys);
+  await run(Object.keys(jobs));
   // IDECOR a veces se satura con tantas consultas juntas: un reintento de las que fallaron
   const failed = Object.keys(D.errors);
   if (failed.length) await run(failed);
