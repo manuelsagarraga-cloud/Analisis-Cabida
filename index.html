@@ -1361,7 +1361,7 @@ function normasMuni(D) {
       const val = function (re) { const v = S_(pick(p, re)); return v && v !== '0' && v !== '-' ? v : ''; };
       if (retTxt) txt.push(['Retiro', retTxt]);
       if (val(/^perfil$/i)) txt.push(['Perfil', val(/^perfil$/i)]);
-      const cm = [val(/^cm_tipo$/i), val(/^cm_alt$/i) && 'altura ' + val(/^cm_alt$/i) + ' m', val(/^cm_ocupaci/i) && 'ocupación ' + val(/^cm_ocupaci/i)].filter(Boolean);
+      const cm = [val(/^cm_tipo$/i), val(/^cm_alt$/i) && 'altura ' + val(/^cm_alt$/i) + ' m', val(/^cm_ocupaci/i) && 'ocupación ' + val(/^cm_ocupaci/i) + (/^\d+([.,]\d+)?$/.test(val(/^cm_ocupaci/i)) ? '%' : '')].filter(Boolean);
       if (cm.length) txt.push(['Centro de manzana', cm.join(' · ')]);
       const lm = [val(/^p_frente_m$/i) && 'frente ' + val(/^p_frente_m$/i) + ' m', val(/^p_frente_e$/i) && 'frente en esquina ' + val(/^p_frente_e$/i) + ' m', val(/^p_sup$/i) && val(/^p_sup$/i) + ' m²'].filter(Boolean);
       if (lm.length) txt.push(['Lote mínimo', lm.join(' · ')]);
@@ -1739,7 +1739,7 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
       const m = String(x[1]).match(/href=["']([^"']+)["'][^>]*>([^<]*)/i);
       return <li key={i}><b>{x[0]} según {nu ? 'la capa' : 'el plano'}:</b> {m ? <a href={m[1]} target="_blank" rel="noopener">{S_(m[2]) || 'ver ficha'} ↗</a> : x[1]}</li>;
     })}</ul>}
-    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : 'Volver a los valores de la capa'}</button>}
+    {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : nu ? 'Volver a los valores de la capa' : 'Volver a los valores del plano'}</button>}
   </div>;
 }
 
