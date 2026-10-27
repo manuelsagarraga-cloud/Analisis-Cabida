@@ -967,7 +967,13 @@ const NIVEL2 = [
   ['Villa María', 'Villa María', -32.4095, -63.2391, 'Ord. 6402 y modificatorias'],
   ['Villa Nueva', 'Villa Nueva', -32.4743, -63.2637, 'Ord. 3710'],
   ['Villa Río Icho Cruz', 'Villa Río Icho Cruz', -31.4828, -64.5631, 'Ord. 214/23']
-].map(function (x) { return { id: 'nu:' + x[1], prov: 'cordoba', nombre: x[0], nu: x[1], nivel: 2, c: [x[2], x[3]], z: 15, ord: x[4] }; });
+].map(function (x) { return { id: 'nu:' + x[1], prov: 'cordoba', nombre: x[0], nu: x[1], nivel: 2, c: [x[2], x[3]], z: 15, ord: x[4] }; }).concat([
+  // Publican su zonificación en IDECOR Ciudades pero no están en la capa provincial: la zona sale del plano municipal
+  ['Capilla del Monte', -30.8569, -64.5264, 'Ord. 2972/19'],
+  ['Del Campillo', -34.3789, -64.4971, 'Ord. 032/2009'],
+  ['Sinsacate', -30.9429, -64.0940, 'Ord. 1206 y 1207/2022'],
+  ['Villa del Rosario', -31.5541, -63.5357, 'Ord. 188/90']
+].map(function (x) { return { id: 'mu:' + x[0], prov: 'cordoba', nombre: x[0], nu: null, nivel: 2, c: [x[1], x[2]], z: 15, ord: x[3] }; })).sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
 // Localidades de nivel 1 que ya se usan (cualquier otra se agrega desde la pantalla de ciudades)
 const NIVEL1 = [
   { id: 'loc:huinca-renanco', prov: 'cordoba', nombre: 'Huinca Renancó', nivel: 1, c: [-34.8413, -64.3747], z: 15, depto: 'General Roca' }
@@ -998,6 +1004,31 @@ function ciudadPorId(id, obj) {
   return CIUDADES.find(function (c) { return c.id === id; }) || (obj && obj.id === id && obj.c ? obj : null);
 }
 function ciudadDeLote(l) { const a = (l && l.analisis) || {}; return ciudadPorId(a.ciudad || 'cordoba', a.ciudadObj) || (a.ciudadObj && a.ciudadObj.nombre ? a.ciudadObj : CORDOBA); }
+/* ═══════ Planos y ordenanzas municipales (data/municipios.json) ═══════
+   Por ciudad: capas urbanísticas municipales publicadas en IDECOR / IDEMSa, los PDF que esas capas citan
+   (alojados por IDECOR en su bucket de documentos) y las ordenanzas con su enlace oficial. */
+let MUNI = null;
+const muniCiudad = function (c) {
+  if (!MUNI || !c) return null;
+  const k = normTxt(c.nombre);
+  const pv = provDe(c);
+  return MUNI.ciudades.find(function (x) { return (x.prov || 'cordoba') === pv && (normTxt(x.nombre) === k || (x.alias || []).some(function (a) { return normTxt(a) === k; })); }) || null;
+};
+// Resuelve un valor de la capa a un enlace: URL completa o archivo alojado por IDECOR
+function muniDoc(mc, v) {
+  const s = S_(v).replace(/<[^>]*href="([^"]+)"[^>]*>.*$/i, '$1').trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  if (mc && mc.docs && mc.docs[s]) return MUNI.docBase + mc.docs[s];
+  return null;
+}
+// Se pide una sola vez al cargar la página; la consulta de un lote lo espera (hasta 6 s) para no perder las capas municipales
+const MUNI_P = fetch('data/municipios.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) MUNI = j; return MUNI; }).catch(function () { return null; });
+function esperarMuni() { return Promise.race([MUNI_P, new Promise(function (r) { setTimeout(function () { r(null); }, 6000); })]); }
+function useMuni() {
+  const [m, setM] = useState(MUNI);
+  useEffect(function () { MUNI_P.then(function (j) { if (j) setM(j); }); }, []);
+  return m;
+}
 function loadCity() { try { const o = JSON.parse(localStorage.getItem('ac.ciudad') || 'null'); return o ? (ciudadPorId(o.id, o) || null) : null; } catch (e) { return null; } }
 function storeCity(c) { try { if (c) localStorage.setItem('ac.ciudad', JSON.stringify(c)); else localStorage.removeItem('ac.ciudad'); } catch (e) { } }
 
@@ -1028,6 +1059,7 @@ async function consultar(lat, lon, city) {
   const d = 0.0012;
   const bb = 'BBOX(geom,' + (lon - d) + ',' + (lat - d) + ',' + (lon + d) + ',' + (lat + d) + ",'EPSG:4326')";
   const local = esLocal(city);
+  if (local && !MUNI) await esperarMuni();
   const salta = provDe(city) === 'salta';
   const F = fuenteCat(city);
   const jobs = salta ? {
@@ -1067,8 +1099,12 @@ async function consultar(lat, lon, city) {
     v9089: () => wfs('CBA_Red_Vial_9089', dw(520), { props: 'detalle' }),
     vecinas: () => wfs('manzana', bb, { props: 'nomenclatura,geom' })
   };
-  const keys = Object.keys(jobs);
   const D = { lat: lat, lon: lon, errors: {}, t: Date.now(), city: city || CORDOBA };
+  // Capas municipales de la ciudad (polígonos por intersección; ejes y corredores lineales a 15 m)
+  const mc = local ? muniCiudad(city) : null;
+  if (mc && mc.capas) mc.capas.forEach(function (c, i) {
+    jobs['mu' + i] = function () { return wfs(c.l, c.g === 'lin' ? dw(15) : I, { base: c.base || undefined, count: 6 }); };
+  });
   if (local) CBA_KEYS.forEach(function (k) { D[k] = []; });
   else D.nu = [];
   if (salta) { D.nu = []; D.vt = []; D.alq = []; }
@@ -1080,11 +1116,12 @@ async function consultar(lat, lon, city) {
       else { D[k] = []; D.errors[k] = String(res[i].reason && res[i].reason.message || res[i].reason); }
     });
   };
-  await run(keys);
+  await run(Object.keys(jobs));
   // IDECOR a veces se satura con tantas consultas juntas: un reintento de las que fallaron
   const failed = Object.keys(D.errors);
   if (failed.length) await run(failed);
   if (salta) normSalta(D, city);
+  D.muni = mc ? mc.capas.map(function (c, i) { return { capa: c, fs: D['mu' + i] || [], err: D.errors['mu' + i] }; }) : [];
   return D;
 }
 
@@ -1269,6 +1306,26 @@ function normaCPUA(p) {
   return N;
 }
 
+// Ciudades sin capa provincial: FOS, FOT y altura del plano de zonificación municipal, si los trae como número
+function normasMuni(D) {
+  const pick = function (p, re) { const k = Object.keys(p).find(function (x) { return re.test(x); }); return k ? p[k] : null; };
+  const out = [];
+  (D.muni || []).forEach(function (x) {
+    if (!x.capa.z) return;
+    x.fs.forEach(function (f) {
+      const p = f.properties || {};
+      let fos = nuNum(pick(p, /^(fos|fosmax|fos_|oye_fos_%|fos_coef)$/i)); if (fos != null && fos <= 1) fos = fos * 100;
+      const fot = nuNum(pick(p, /^(fot|fotmax|oye_fot|fot_coef)$/i));
+      const h = nuNum(pick(p, /^(altura_max|alt_max|altmax|h_max|hmax|oye_alt_max_m|altura_max_m)$/i));
+      const zona = S_(pick(p, /^(zona|desig|design|designacion|patron|layer)$/i)) || S_(pick(p, /^(name|nombre)$/i));
+      const N = normaLocal({ fos: fos, fot: fot, hMax: h }, { zona: zona, ord: x.capa.t });
+      if (N.noCalc) N.noCalcReason = 'El plano municipal no trae FOS, FOT o altura como número para esta zona: cargalos desde la ordenanza.';
+      out.push(N);
+    });
+  });
+  return out;
+}
+
 // Valores iniciales del editor de parámetros a partir de la norma de la capa
 function npDesde(N) {
   const r = function (x) { return x == null ? '' : Math.round(x * 100) / 100; };
@@ -1286,7 +1343,8 @@ function buildModel(D) {
   M.city = D.city || CORDOBA;
   M.local = esLocal(M.city);
   // normas de ocupación (puede haber superposición: convenio + zona base)
-  const normas = M.city.cpua ? D.cpua.map(function (f) { return normaCPUA(f.properties); }) : M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
+  let normas = M.city.cpua ? D.cpua.map(function (f) { return normaCPUA(f.properties); }) : M.local ? D.nu.map(function (f) { return normaNU(f.properties); }) : D.zona.map(function (f) { return E.parseNorma(f.properties); });
+  if (M.local && !M.city.cpua && !normas.length) normas = normasMuni(D);
   normas.sort(function (a, b) {
     const sa = (a.convenio && !a.noCalc ? 0 : (!a.noCalc ? 1 : 2)), sb = (b.convenio && !b.noCalc ? 0 : (!b.noCalc ? 1 : 2));
     return sa - sb;
@@ -1521,7 +1579,7 @@ function CabidaCard({ M, normaSel, setNormaSel, preset }) {
   const used = r && r.rows ? r.rows.filter(function (x) { return x.area > 1e-6; }) : [];
   const limTxt = !r || r.error ? '' : r.limit === 'FOT' ? 'Limita el FOT' : r.limit === 'FOS' ? 'Limita el FOS' : r.limit === 'Retiros' ? 'Limitan los retiros' : 'Limita el perfil';
   return (
-    <Card title="Cabida máxima" src={M.local ? (N0 && N0.meta && N0.meta.cpua ? 'Indicadores de la ficha del CPUA, editables' : N0 && !N0.noCalc ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
+    <Card title="Cabida máxima" src={M.local ? (N0 && N0.meta && N0.meta.cpua ? 'Indicadores de la ficha del CPUA, editables' : N0 && !N0.noCalc && !N0.meta.nu ? 'Parámetros del plano municipal, editables' : N0 && !N0.noCalc ? 'Parámetros de la capa provincial, editables' : 'Parámetros cargados a mano') : 'Cálculo con parámetros de la capa oficial'} hero>
       {M.normas.length > 1 && <label className="fld" style={{ marginBottom: 10 }}>
         <span>Norma aplicada (el punto cae en {M.normas.length} polígonos)</span>
         <span className="row"><select value={normaSel != null ? normaSel : M.normas.indexOf(N0)} onChange={function (e) { setNormaSel(parseInt(e.target.value, 10)); }}>
@@ -1594,7 +1652,7 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
   const f = function (k, label, unit, step, ph) {
     return <label className="fld"><span>{label}</span><span className="row"><input type="number" inputMode="decimal" step={step || '0.01'} min="0" value={np[k] == null ? '' : np[k]} onChange={setNp(k)} placeholder={ph || ''} /><span className="u">{unit}</span></span></label>;
   };
-  const origen = meta.cpua ? 'Valores de la ficha del distrito ' + meta.zona + ' (' + meta.ord + ', Anexo 4.2).' : N0 && meta.ord === CPUA_ORD ? 'El distrito ' + meta.zona + ' no tiene ficha numérica: cargá los valores a mano.' : N0 ? 'Valores de la capa provincial (' + (meta.ord || 'ordenanza local') + ').' : 'Este punto no tiene zona cargada: cargá los valores del código urbano de ' + M.city.nombre + '.';
+  const origen = meta.cpua ? 'Valores de la ficha del distrito ' + meta.zona + ' (' + meta.ord + ', Anexo 4.2).' : N0 && meta.ord === CPUA_ORD ? 'El distrito ' + meta.zona + ' no tiene ficha numérica: cargá los valores a mano.' : N0 && !meta.nu ? 'Valores del plano municipal (' + (meta.ord || 'ordenanza local') + ').' : N0 ? 'Valores de la capa provincial (' + (meta.ord || 'ordenanza local') + ').' : 'Este punto no tiene zona cargada: cargá los valores del código urbano de ' + M.city.nombre + '.';
   // Textos de la capa que no se pudieron leer como número: quedan a la vista para cargarlos a mano
   const txt = [];
   if (nu) {
@@ -1616,7 +1674,11 @@ function ParamsLocal({ M, N0, np, setNp, onReset }) {
       {f('rfo', 'Retiro de fondo', 'm', '0.5', meta.fondoH ? '1/3 H · mín. 4' : '')}
     </div>
     {meta.fondoH && !np.rfo && <p className="small muted" style={{ marginTop: 6 }}>Retiro de fondo: 1/3 de la altura, mínimo 4 m, sin retiro en esquina (CPUA, nota 8). Se recalcula con la altura; escribí un valor para fijarlo.</p>}
-    {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) { return <li key={i}><b>{x[0]} según la capa:</b> {x[1]}</li>; })}</ul>}
+    {txt.length > 0 && <ul className="refs" style={{ marginTop: 8 }}>{txt.map(function (x, i) {
+      // Algunas localidades cargan un enlace en lugar del valor (Unquillo: ficha por zona)
+      const m = String(x[1]).match(/href=["']([^"']+)["'][^>]*>([^<]*)/i);
+      return <li key={i}><b>{x[0]} según la capa:</b> {m ? <a href={m[1]} target="_blank" rel="noopener">{S_(m[2]) || 'ver ficha'} ↗</a> : x[1]}</li>;
+    })}</ul>}
     {N0 && <button className="btn" style={{ marginTop: 8 }} onClick={onReset}>{meta.cpua ? 'Volver a los valores de la ficha' : 'Volver a los valores de la capa'}</button>}
   </div>;
 }
@@ -1656,6 +1718,105 @@ function NormaCPUACard({ M }) {
     })}
     <p className="small muted" style={{ marginTop: 10 }}>No se modelan: perímetro libre, basamento, pasajes (nota 4), FOT público, transferencia de potencial ni restricciones ANAC. Usos permitidos en la ficha de cada distrito.</p>
   </Card>;
+}
+
+/* ── Planos municipales: lo que dicen las capas propias de la municipalidad en este punto ── */
+const MU_LBL = {
+  fos: 'FOS', fot: 'FOT', fis: 'FIS', ie: 'Índice de edificación', iep: 'Índice espacio piso', cuf: 'CUF', ssa: 'Suelo absorbente', fcv: 'FCV', ipl: 'IPL', iufh: 'IUFH',
+  zona: 'Zona', zonas: 'Zona', nombre: 'Nombre', name: 'Nombre', desig: 'Designación', design: 'Designación', designacion: 'Designación', denominacion: 'Denominación', patron: 'Patrón', dspatron: 'Patrón',
+  desc: 'Descripción', descrip: 'Descripción', descripcio: 'Descripción', descripcion: 'Descripción', def: 'Definición', definicion: 'Definición', caract: 'Carácter', carac: 'Carácter', caracter: 'Carácter', caracter_urb: 'Carácter urbanístico', caracter_urbanistico: 'Carácter urbanístico',
+  uso: 'Uso', usos: 'Usos', uso_dom: 'Uso dominante', u_dom: 'Uso dominante', uso_domi: 'Uso dominante', usodomina: 'Uso dominante', uso_dominante: 'Uso dominante', uso_domina: 'Uso dominante', usos_dom: 'Usos dominantes', uso_princ: 'Uso principal',
+  uso_comp: 'Uso complementario', u_comp: 'Uso complementario', uso_comple: 'Uso complementario', usoscomple: 'Usos complementarios', uso_complementario: 'Uso complementario', usos_comp: 'Usos complementarios',
+  uso_cond: 'Uso condicionado', u_cond: 'Uso condicionado', uso_condi: 'Uso condicionado', usos_tolerados: 'Usos tolerados', uso_restri: 'Uso restringido', usosrestri: 'Usos restringidos', u_res: 'Uso restringido', uso_prohib: 'Uso prohibido', uso_prohi: 'Uso prohibido', usos_prohi: 'Usos prohibidos', usos_no_per: 'Usos no permitidos', usos_noper: 'Usos no permitidos', usos_per: 'Usos permitidos', usos_perm: 'Usos permitidos', usos_exclus: 'Usos excluidos', no_autorizado: 'No autorizado', permitido: 'Permitido', preponderante: 'Preponderante',
+  sup_min: 'Superficie mínima', sup_minparc: 'Superficie mínima', sup_min_m2: 'Superficie mínima', sup_min_lote: 'Superficie mínima', sup_min_lo: 'Superficie mínima', supmin: 'Superficie mínima', superficie_min: 'Superficie mínima', sup_lote: 'Superficie de lote', lote_min: 'Lote mínimo', p_sup: 'Superficie mínima',
+  fte_min: 'Frente mínimo', fren_min: 'Frente mínimo', frente_min: 'Frente mínimo', frente_min_m: 'Frente mínimo', ftemin: 'Frente mínimo', fte_min_lote: 'Frente mínimo', frente_min_subdiv: 'Frente mínimo', frente: 'Frente', ancho_parc: 'Ancho de parcela', ancho_min: 'Ancho mínimo', p_frente_m: 'Frente mínimo (medianera)', p_frente_e: 'Frente mínimo (esquina)',
+  h_max: 'Altura máxima', hmax: 'Altura máxima', alt_max: 'Altura máxima', altmax: 'Altura máxima', altura_max: 'Altura máxima', altura_max_m: 'Altura máxima', alt: 'Altura', altmax_m: 'Altura máxima', h_max_1: 'Altura máxima', h_max_2: 'Altura máxima (otra)', h_max_bas: 'Altura de basamento', num_pisos: 'Pisos', num_max_pisos: 'Pisos máximos', num_plantas_max: 'Plantas máximas', num_max_ptas: 'Plantas máximas', plan_max: 'Plantas máximas', plan_permi: 'Plantas permitidas', num_max_plan: 'Plantas máximas', perfil: 'Perfil', perfil_graf: 'Gráfico del perfil',
+  ret: 'Retiros', retiro: 'Retiro', retiros: 'Retiros', ret_fte: 'Retiro de frente', ret_frente: 'Retiro de frente', retiro_frente: 'Retiro de frente', r_frente: 'Retiro de frente', retiro_lf: 'Retiro de frente', retiro_le: 'Retiro de LE', ret_lat: 'Retiro lateral', retiro_lat: 'Retiro lateral', r_lateral: 'Retiro lateral', ret_fon: 'Retiro de fondo', ret_fondo: 'Retiro de fondo', r_fondo: 'Retiro de fondo', fondo: 'Fondo', ret_esq: 'Retiro en esquina', ret_min: 'Retiro mínimo', rtiromin: 'Retiro mínimo', retiro_min: 'Retiro mínimo', linea_edif: 'Línea de edificación', linea_fondo: 'Línea de fondo', retirofrent: 'Retiro de frente', retirolat: 'Retiro lateral', ret_lat_y_cfte: 'Retiro lateral y contrafrente', contrafte: 'Contrafrente',
+  unid_func: 'Unidades funcionales', ud_func: 'Unidades funcionales', uni_func: 'Unidades funcionales', unidfunc: 'Unidades funcionales', u_funcionales_max: 'Unidades funcionales', cant_ud_viv: 'Viviendas por lote', ud_viv_x_lote: 'Viviendas por lote', uf_x_parc: 'Unidades por parcela', cant_max_ud: 'Unidades máximas', uf_reside: 'UF residenciales', densidad: 'Densidad',
+  obs: 'Observaciones', obsrv: 'Observaciones', observ: 'Observaciones', observaciones: 'Observaciones', observacio: 'Observaciones', nota: 'Nota', excepciones: 'Excepciones', cond_extra: 'Condiciones', otras_condic: 'Otras condiciones', espec: 'Especificaciones', dispespecial: 'Disposiciones especiales', restricc: 'Restricciones', restriccion: 'Restricción', contenido: 'Contenido',
+  ord: 'Ordenanza', ordenanza: 'Ordenanza', ordenanza_area: 'Ordenanza', n_ord_subarea: 'Ordenanza', nro_ord: 'Ordenanza', normativa: 'Normativa', modificatoria: 'Modificatoria', modificada: 'Modificada por', art: 'Artículo', art_modificado: 'Artículo modificado',
+  delimitacion: 'Delimitación', delimit: 'Delimitación', del: 'Delimitación', ubic: 'Ubicación', ubicacion: 'Ubicación', limites: 'Límites', barrio: 'Barrio', area: 'Área', sub_area: 'Subárea', subarea2: 'Subárea', nombre_area: 'Área', nombre_subarea: 'Subárea', sigla: 'Sigla', abrev: 'Sigla', corredor: 'Corredor', corr: 'Corredor', eje: 'Eje', tipo: 'Tipo', jerarquia: 'Jerarquía', suelo: 'Suelo', fraccionam: 'Fraccionamiento', fracc: 'Fraccionamiento', fraccion_m: 'Fraccionamiento', subdiv_suelo: 'Subdivisión', ocup_suelo: 'Ocupación',
+  cm_tipo: 'Centro de manzana (tipo)', cm_alt: 'Centro de manzana (altura)', cm_ocupaci: 'Centro de manzana (ocupación %)', cm_ocup: 'Centro de manzana (ocupación %)', p_pasillo: 'Lote con pasillo', uso_ind: 'Uso industrial', graficos: 'Gráfico', fos_coef: 'FOS según pendiente', fot_coef: 'FOT según pendiente', fcv_coef: 'FCV según pendiente', materializ: 'Materialización', material_1: 'Materialización', uf_turis: 'UF turísticas', sup_ufe: 'Superficie por UF', nomenclatu: 'Nomenclatura',
+  DISTRITO: 'Distrito', PRAC: 'Protección PRAC', ficha: 'Ficha', domicilio: 'Domicilio', inmueble: 'Inmueble', numero: 'Número', catastro: 'Catastro', TIPO: 'Tipo', NOMBE: 'Nombre', MIUP: 'N°', Clasific: 'Clasificación', clas: 'Clasificación'
+};
+const MU_SKIP = /^(area km2|area m2|area ha|area_m2|area_ha|id|fid|gid|tid|xid|ogc_fid|object_?id|objectid|global_?id|globalid|shape_|area2?$|AREA2?$|text$|layer$|estilo|orden$|num_area|num_subarea|num_zona|abrev_2|zona_graf|geom)/i;
+function muLabel(k) { return MU_LBL[k] || MU_LBL[k.toLowerCase()] || (k.charAt(0).toUpperCase() + k.slice(1)).replace(/_/g, ' '); }
+function PlanosMuniCard({ M }) {
+  const mc = muniCiudad(M.city);
+  const capas = (M.D.muni || []).filter(function (x) { return x.fs.length; });
+  if (!mc) return null;
+  const vacias = (M.D.muni || []).filter(function (x) { return !x.fs.length && !x.err; }).length;
+  return <Card title="Planos municipales" src={mc.fuente || 'IDECOR Ciudades'}>
+    {capas.length === 0 && <p className="muted">El punto no cae en ninguna de las {(M.D.muni || []).length} capas urbanísticas que publica {M.city.nombre}.</p>}
+    {capas.map(function (x, i) {
+      return <div key={i} style={{ marginTop: i ? 14 : 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 13 }}>{x.capa.t}</div>
+        {x.fs.slice(0, 3).map(function (f, j) {
+          const docs = [], items = [];
+          Object.entries(f.properties || {}).forEach(function (kv) {
+            const k = kv[0], v = S_(kv[1]);
+            if (!v || MU_SKIP.test(k) || v === '-' || v === '0') return;
+            const url = muniDoc(mc, v);
+            if (url) { docs.push({ k: k, v: v, url: url }); return; }
+            if (/\.(pdf|dwg|jpg|png)$/i.test(v)) { docs.push({ k: k, v: v, url: null }); return; }
+            items.push([muLabel(k), v.length > 220 ? <details className="more"><summary>{v.slice(0, 160)}…</summary><div style={{ whiteSpace: 'pre-wrap' }}>{v}</div></details> : <span style={{ whiteSpace: 'pre-wrap' }}>{v}</span>]);
+          });
+          return <div key={j} style={{ marginTop: 6, paddingTop: j ? 8 : 0, borderTop: j ? '1px dashed var(--b1)' : 'none' }}>
+            <KV items={items} />
+            {docs.length > 0 && <div className="tags" style={{ marginTop: 6 }}>{docs.map(function (d, n) {
+              const nom = d.v.replace(/\.(pdf|dwg|jpg|png)$/i, '').replace(/[_-]+/g, ' ');
+              return d.url ? <a key={n} className="tag tag-ac" href={d.url} target="_blank" rel="noopener">{nom} ↗</a> : <span key={n} className="tag tag-grey" title="El archivo figura en la capa pero no está publicado">{nom}</span>;
+            })}</div>}
+          </div>;
+        })}
+      </div>;
+    })}
+    {vacias > 0 && capas.length > 0 && <p className="small muted" style={{ marginTop: 10 }}>{vacias} capa{vacias === 1 ? '' : 's'} más de {M.city.nombre} no alcanza{vacias === 1 ? '' : 'n'} este punto.</p>}
+    <p className="small muted" style={{ marginTop: 10 }}>Texto tal como lo publica la municipalidad. Los documentos se abren desde el repositorio de IDECOR o el sitio oficial del municipio.</p>
+  </Card>;
+}
+
+/* ── Ordenanzas de la ciudad (catálogo) ── */
+function OrdenanzasCiudad({ mc, compact }) {
+  if (!mc) return null;
+  const ords = mc.ordenanzas || [];
+  const docs = Object.keys(mc.docs || {});
+  return <div>
+    {mc.aviso && <div className="alert" style={{ marginTop: 0 }}>{mc.aviso}</div>}
+    {ords.length > 0 && <ul className="refs" style={{ marginTop: 4 }}>{ords.map(function (o, i) {
+      return <li key={i}><b>{o.n}</b>{o.t ? ' · ' + o.t : ''}{o.u ? <Fragment> · <a href={o.u} target="_blank" rel="noopener">{o.f || 'texto'} ↗</a></Fragment> : null}{o.nota ? <span className="muted"> · {o.nota}</span> : null}</li>;
+    })}</ul>}
+    {(mc.mapas || []).length > 0 && <p className="small" style={{ marginTop: 8 }}>Mapas oficiales: {mc.mapas.map(function (m, i) { return <Fragment key={i}>{i ? ' · ' : ''}<a href={m.u} target="_blank" rel="noopener">{m.t} ↗</a></Fragment>; })}</p>}
+    {!compact && docs.length > 0 && <details className="more" style={{ marginTop: 8 }}><summary>{docs.length} documentos citados en los planos</summary>
+      <div className="tags" style={{ marginTop: 6 }}>{docs.sort().map(function (d) { return <a key={d} className="tag tag-grey" href={MUNI.docBase + mc.docs[d]} target="_blank" rel="noopener">{d.replace(/\.(pdf|dwg)$/i, '').replace(/[_-]+/g, ' ')}</a>; })}</div>
+    </details>}
+  </div>;
+}
+function OrdCiudadCard({ M }) {
+  const mc = muniCiudad(M.city);
+  if (!mc || !((mc.ordenanzas || []).length || Object.keys(mc.docs || {}).length)) return null;
+  return <Card title="Ordenanzas de la ciudad" src="Catálogo de normativa urbana">
+    <OrdenanzasCiudad mc={mc} />
+  </Card>;
+}
+
+/* ── Directorio de normativa por provincia (pestaña Ordenanzas fuera de Córdoba capital) ── */
+function DirectorioMuni({ prov, actual }) {
+  const [f, setF] = useState('');
+  if (!MUNI) return <div className="ld"><div className="sp" /><span>Cargando catálogo…</span></div>;
+  const t = normTxt(f);
+  const cs = MUNI.ciudades.filter(function (c) { return (c.prov || 'cordoba') === prov && (!t || normTxt(c.nombre).indexOf(t) >= 0); })
+    .sort(function (a, b) { return (actual && normTxt(a.nombre) === normTxt(actual.nombre) ? -1 : 0) - (actual && normTxt(b.nombre) === normTxt(actual.nombre) ? -1 : 0) || a.nombre.localeCompare(b.nombre); });
+  return <div>
+    <label className="fld" style={{ maxWidth: 320, marginBottom: 10 }}><span className="row"><input value={f} onChange={function (e) { setF(e.target.value); }} placeholder="Filtrar ciudad" aria-label="Filtrar ciudad" /></span></label>
+    {cs.map(function (c) {
+      const n = (c.capas || []).length;
+      return <Card key={c.nombre} title={c.nombre} src={n ? n + ' capa' + (n === 1 ? '' : 's') + ' municipal' + (n === 1 ? '' : 'es') : 'Sin plano digital'}>
+        <OrdenanzasCiudad mc={c} />
+        {n > 0 && <p className="small muted" style={{ marginTop: 6 }}>Planos: {c.capas.map(function (x) { return x.t; }).join(' · ')}</p>}
+      </Card>;
+    })}
+  </div>;
 }
 
 /* ── Ficha de normativa para localidades del interior ── */
@@ -1933,7 +2094,17 @@ function MapView({ onPick, M, overlay, active, focus, city }) {
         ov['Parcelas'] = ws(F.wms, F.par, { minZoom: 16, opacity: 0.85, attribution: 'IDESA · Provincia de Salta' }).addTo(map);
       } else {
         ov = { 'Parcelas': w('parcelas', { minZoom: 16, opacity: 0.85 }).addTo(map) };
-        if (city.nivel >= 2) ov['Ocupación del suelo'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
+        if (city.nu) ov['Ocupación del suelo (provincial)'] = w(NU_LAYER, { opacity: 0.45 }).addTo(map);
+      }
+      // Planos de la municipalidad: el primero de zonificación se prende si la ciudad no está en la capa provincial
+      const mc = muniCiudad(city);
+      if (mc && mc.capas) {
+        let prendida = !!city.nu;
+        mc.capas.forEach(function (c) {
+          const lay = L.tileLayer.wms(c.wms || (c.base ? c.base.replace(/wfs$/, 'wms') : WMS), { layers: c.l, format: 'image/png', transparent: true, version: '1.1.1', opacity: c.g === 'lin' ? 0.9 : 0.45, attribution: mc.fuente || 'IDECOR Ciudades' });
+          ov['Plano municipal · ' + c.t] = lay;
+          if (!prendida && c.z) { lay.addTo(map); prendida = true; }
+        });
       }
       L.control.layers({ 'Mapa gris (IGN)': base, 'Argenmap (IGN)': argen, 'Calles (OSM)': osm, 'Satélite': sat }, ov, { collapsed: true }).addTo(map);
       L.control.scale({ imperial: false }).addTo(map);
@@ -3272,6 +3443,7 @@ function App() {
   const [toast, setToast] = useState('');
   const reqId = useRef(0);
   const dg = useDigesto();
+  const muniCat = useMuni();
   const [sess, setSess] = useState(null);
   const [authOk, setAuthOk] = useState(false);
   const [empCtx, setEmpCtxS] = useState(function () { try { return localStorage.getItem('ac.empresa') || '*'; } catch (e) { return '*'; } });
@@ -3288,7 +3460,7 @@ function App() {
   cityRef.current = city;
   const local = esLocal(city);
   const setCity = function (c) {
-    cityRef.current = c; setCityS(c); storeCity(c); setElegir(false); setProvSel(provDe(c)); setTab(function (t) { return t === 'ord' && esLocal(c) ? 'lote' : t; });
+    cityRef.current = c; setCityS(c); storeCity(c); setElegir(false); setProvSel(provDe(c));
     reqId.current++; setM(null); setErr(null); setOpts(null); setOverlay(null); setBusy(false); setNormaSel(null); setQ('');
     try { history.replaceState(null, '', location.pathname); } catch (e) { }
   };
@@ -3429,7 +3601,7 @@ function App() {
       <button className="city-chip" onClick={function () { setElegir(true); }} title="Cambiar de ciudad o provincia"><span className={'niv niv-' + city.nivel} style={{ padding: '0 5px' }}>N{city.nivel}</span>{city.nombre}{provDe(city) !== 'cordoba' && !/salta/i.test(city.nombre) ? ' · ' + provInfo(provDe(city)).nombre : ''}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg></button>
       <div className="seg" style={{ marginLeft: 8 }}>
         <button className={tab === 'lote' ? 'on' : ''} onClick={function () { setTab('lote'); }}>Lote</button>
-        {!local && <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>}
+        <button className={tab === 'ord' ? 'on' : ''} onClick={function () { setTab('ord'); }}>Ordenanzas</button>
         <button className={tab === 'cartera' ? 'on' : ''} onClick={function () { setTab('cartera'); }}>Cartera{carteraVis && carteraVis.length ? ' · ' + carteraVis.length : ''}</button>
       </div>
       <div className="acts">
@@ -3447,7 +3619,7 @@ function App() {
         {opts && <div className="sres">{opts.map(function (o, i) { return <button key={i} type="button" onClick={function () { setOpts(null); goTo(o); }}>{o.label}</button>; })}</div>}
       </form>
       <div className="main">
-        <MapView key={city.id} city={city} onPick={pick} M={M} overlay={overlay} active={tab === 'lote'} focus={focus} />
+        <MapView key={city.id + (muniCat ? ':m' : '')} city={city} onPick={pick} M={M} overlay={overlay} active={tab === 'lote'} focus={focus} />
         <div className="panel">
           {err && <div className="alert" style={{ marginTop: 0, marginBottom: 10 }}>{err}</div>}
           {busy && <div className="ld"><div className="sp" /><span>{local ? 'Consultando catastro y normativa de ' + (provDe(city) === 'salta' ? 'IDESA e IDEMSa' : 'IDECOR') + '…' : 'Consultando 23 capas de IDECOR para este punto…'}</span></div>}
@@ -3483,7 +3655,7 @@ function App() {
             <LoteCard M={M} lote={loteActual} />
             <CabidaCard M={M} normaSel={normaSel} setNormaSel={setNormaSel} preset={preset} />
             <div className="no-print"><CarteraCard M={M} sess={sess} lote={loteActual} cartErr={cartErr} q={q} empresaDestino={empresaDestino} empresas={empresas} onLogin={salir} onChange={loadCartera} onApply={aplicarEscenario} marcarAplicado={function () { aplicado.current = M.D.t; }} /></div>
-            {M.local ? <NormaLocalCard M={M} /> : <Fragment>
+            {M.local ? <Fragment><PlanosMuniCard M={M} /><NormaLocalCard M={M} /><OrdCiudadCard M={M} /></Fragment> : <Fragment>
               <NormaCard M={M} />
               <UsoCard M={M} />
               <FraccCard M={M} />
@@ -3498,7 +3670,12 @@ function App() {
       </div>
     </div>
 
-    {tab === 'ord' && <div className="page"><div className="page-in">
+    {tab === 'ord' && local && <div className="page"><div className="page-in">
+      <h1 className="title-lote" style={{ fontSize: 20 }}>Normativa urbana · {provInfo(provDe(city)).nombre}</h1>
+      <p className="sub" style={{ marginBottom: 14 }}>Planos y ordenanzas de uso, ocupación y fraccionamiento del suelo de cada ciudad, con enlace al texto oficial. {city.nombre} aparece primero.</p>
+      <DirectorioMuni prov={provDe(city)} actual={city} />
+    </div></div>}
+    {tab === 'ord' && !local && <div className="page"><div className="page-in">
       <h1 className="title-lote" style={{ fontSize: 20 }}>Ordenanzas que impactan en la ciudad</h1>
       <p className="sub" style={{ marginBottom: 14 }}>Marco normativo vigente según el Digesto municipal, más el índice de todas las normas citadas en las capas oficiales: zonas, perfiles, modificatorias, convenios urbanísticos y loteos aprobados.</p>
       <OrdIndex onMapa={showOnMap} />

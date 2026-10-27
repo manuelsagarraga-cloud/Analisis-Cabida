@@ -11,6 +11,14 @@ Al entrar se elige la provincia y después la ciudad.
 - **Córdoba:** IDECOR (catastro, capas municipales y capa provincial de normativas).
 - **Salta:** catastro provincial de IDESA (`geonode:fc_parcelas_v20`, `geonode:fc_manzanas_…`) en toda la provincia. En Salta capital, el distrito sale de la capa `public:Zonificacion_CPUA2025_CGO_15102025` de IDEMSa y los indicadores de la tabla `CPUA` en `index.html`, cargada a mano desde las fichas del Anexo 4.2 del CPUA 2025 (Ord. 16.486), porque la capa trae FOS/FOT vacíos. El servidor municipal no aplica filtros espaciales a su capa de catastro: por eso las parcelas salen de IDESA.
 
+## Planos y ordenanzas municipales
+
+`data/municipios.json` reúne, por ciudad, las capas urbanísticas que la municipalidad publica (IDECOR Ciudades en Córdoba, IDEMSa en Salta capital), los PDF que esas capas citan y las ordenanzas con enlace al texto oficial. En la ficha del lote aparecen como "Planos municipales" y "Ordenanzas de la ciudad"; en el mapa, como capas "Plano municipal · …"; y la pestaña Ordenanzas muestra el directorio de la provincia.
+
+- Los PDF están en el repositorio público de IDECOR (`obs-idecor-mapas-docs…/m<mapa>/<archivo>`), que no se puede listar: `tools/idecor_relevamiento.json` guarda en qué carpeta está cada archivo.
+- Las ordenanzas, avisos y enlaces oficiales se cargan a mano en `tools/municipios_curado.py`.
+- Para regenerar: `python3 tools/armar_municipios.py`.
+
 ## Ciudades y niveles
 
 Al entrar se elige la ciudad. El nivel dice cuánto del código urbano calcula la herramienta sola:
