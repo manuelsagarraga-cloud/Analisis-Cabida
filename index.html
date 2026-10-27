@@ -1021,11 +1021,12 @@ function muniDoc(mc, v) {
   if (mc && mc.docs && mc.docs[s]) return MUNI.docBase + mc.docs[s];
   return null;
 }
+// Se pide una sola vez al cargar la página; la consulta de un lote lo espera (hasta 6 s) para no perder las capas municipales
+const MUNI_P = fetch('data/municipios.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) MUNI = j; return MUNI; }).catch(function () { return null; });
+function esperarMuni() { return Promise.race([MUNI_P, new Promise(function (r) { setTimeout(function () { r(null); }, 6000); })]); }
 function useMuni() {
-  const [m, setM] = useState(null);
-  useEffect(function () {
-    fetch('data/municipios.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) { MUNI = j; setM(j); } }).catch(function () { });
-  }, []);
+  const [m, setM] = useState(MUNI);
+  useEffect(function () { MUNI_P.then(function (j) { if (j) setM(j); }); }, []);
   return m;
 }
 function loadCity() { try { const o = JSON.parse(localStorage.getItem('ac.ciudad') || 'null'); return o ? (ciudadPorId(o.id, o) || null) : null; } catch (e) { return null; } }
@@ -1058,6 +1059,7 @@ async function consultar(lat, lon, city) {
   const d = 0.0012;
   const bb = 'BBOX(geom,' + (lon - d) + ',' + (lat - d) + ',' + (lon + d) + ',' + (lat + d) + ",'EPSG:4326')";
   const local = esLocal(city);
+  if (local && !MUNI) await esperarMuni();
   const salta = provDe(city) === 'salta';
   const F = fuenteCat(city);
   const jobs = salta ? {
