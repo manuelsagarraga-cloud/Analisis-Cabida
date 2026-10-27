@@ -1128,7 +1128,8 @@ async function consultar(lat, lon, city) {
       const fs = await wfs(P.l, I, { count: 1 });
       if (fs.length) { D.parcela = fs.map(function (f) { return normParcelaMuni(f, P, city); }); D.parcelaMuni = true; }
     } catch (e) { D.errors.parcelaMunicipal = String(e.message || e); }
-    if (P.mz && !D.manzana.length) {
+    // Con parcelas municipales se usan también las manzanas municipales: las provinciales no comparten vértices y el lote parecería interno
+    if (P.mz && D.parcelaMuni) {
       try {
         const nm = function (f) { const p = f.properties; p.nomenclatura = S_(p.nomenclatura) || [p.c, p.s, p.m].filter(function (x) { return x != null; }).join('-') || String(f.id || ''); return f; };
         D.manzana = (await wfs(P.mz, I, { count: 1 })).map(nm);
